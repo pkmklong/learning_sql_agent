@@ -1,6 +1,8 @@
 import sqlite3
 import re
+import os
 from typing import Optional, List, Dict, Any
+from dotenv import load_dotenv
 from langchain.agents import create_sql_agent
 from langchain.agents.agent_toolkits import SQLDatabaseToolkit
 from langchain.sql_database import SQLDatabase
@@ -8,6 +10,9 @@ from langchain.llms import OpenAI
 from langchain.agents import AgentExecutor
 from langchain.schema import AgentAction, AgentFinish
 from langchain.callbacks.base import BaseCallbackHandler
+
+# Load environment variables
+load_dotenv()
 
 class SafeSQLDatabase(SQLDatabase):
     """
@@ -151,8 +156,15 @@ class HackathonSQLAgent:
     A lightweight SQL agent for hackathon training
     """
     
-    def __init__(self, db_path: str, openai_api_key: str, model_name: str = "gpt-3.5-turbo"):
+    def __init__(self, db_path: str, openai_api_key: Optional[str] = None, model_name: str = "gpt-3.5-turbo"):
         self.db_path = db_path
+        
+        # Get API key from parameter or environment
+        if openai_api_key is None:
+            openai_api_key = os.getenv("OPENAI_API_KEY")
+        
+        if not openai_api_key:
+            raise ValueError("OpenAI API key is required. Set OPENAI_API_KEY environment variable or pass it as parameter.")
         
         # Initialize the safe database connection
         self.db = SafeSQLDatabase.from_uri(f"sqlite:///{db_path}")
@@ -237,16 +249,26 @@ class HackathonSQLAgent:
 def main():
     """Main function to demonstrate the SQL agent"""
     
-    # Set up your OpenAI API key
-    OPENAI_API_KEY = "your-openai-api-key-here"  # Replace with actual key
+    # Get OpenAI API key from environment
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    if not OPENAI_API_KEY:
+        print("❌ Error: Please set your OPENAI_API_KEY in the .env file")
+        print("1. Copy .env.example to .env")
+        print("2. Add your OpenAI API key to the .env file")
+        return
+    
+    print("🏥 Healthcare SQL Agent Hackathon")
+    print("=" * 50)
     
     # Create sample database
+    print("📊 Creating healthcare database...")
     create_sample_database()
     
     # Initialize the agent
+    print("🤖 Initializing AI agent...")
     agent = HackathonSQLAgent(
-        db_path="healthcare_hackathon.db",
-        openai_api_key=OPENAI_API_KEY
+        db_path="healthcare_hackathon.db"
+        # API key will be loaded from .env automatically
     )
     
     # Print schema information

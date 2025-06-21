@@ -1,15 +1,48 @@
 import sqlite3
 import re
 import os
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from dotenv import load_dotenv
 from langchain.agents import create_sql_agent
 from langchain.agents.agent_toolkits import SQLDatabaseToolkit
 from langchain.sql_database import SQLDatabase
-from langchain.llms import OpenAI
 from langchain.agents import AgentExecutor
 from langchain.schema import AgentAction, AgentFinish
 from langchain.callbacks.base import BaseCallbackHandler
+
+# Import config
+try:
+    from config import get_llm_config, validate_llm_setup, list_available_models, print_setup_instructions, DEFAULT_LLM
+    CONFIG_AVAILABLE = True
+except ImportError:
+    CONFIG_AVAILABLE = False
+    print("⚠️  config.py not found. Using basic configuration.")
+
+# Import different LLM options
+try:
+    from langchain.llms import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+
+try:
+    from langchain.llms import Ollama
+    OLLAMA_AVAILABLE = True
+except ImportError:
+    OLLAMA_AVAILABLE = False
+
+try:
+    from langchain.llms import LlamaCpp
+    LLAMACPP_AVAILABLE = True
+except ImportError:
+    LLAMACPP_AVAILABLE = False
+
+try:
+    from langchain_community.llms import HuggingFacePipeline
+    from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+    HUGGINGFACE_AVAILABLE = True
+except ImportError:
+    HUGGINGFACE_AVAILABLE = False
 
 # Load environment variables
 load_dotenv()
@@ -153,28 +186,42 @@ def create_sample_database(db_path: str = "healthcare_hackathon.db"):
 
 class HackathonSQLAgent:
     """
-    A lightweight SQL agent for hackathon training
+    A lightweight SQL agent for hackathon training with config-managed LLMs
     """
     
-    def __init__(self, db_path: str, openai_api_key: Optional[str] = None, model_name: str = "gpt-3.5-turbo"):
+    def __init__(self, db_path: str, llm_config: Union[str, Dict[str, Any]] = None):
         self.db_path = db_path
         
-        # Get API key from parameter or environment
-        if openai_api_key is None:
-            openai_api_key = os.getenv("OPENAI_API_KEY")
+        # Get LLM configuration
+        if llm_config is None:
+            if CONFIG_AVAILABLE:
+                llm_config = DEFAULT_LLM
+            else:
+                llm_config = "openai"  # fallback
         
-        if not openai_api_key:
-            raise ValueError("OpenAI API key is required. Set OPENAI_API_KEY environment variable or pass it as parameter.")
+        # Handle string config (model name) vs dict config (custom)
+        if isinstance(llm_config, str):
+            if CONFIG_AVAILABLE:
+                self.config = get_llm_config(llm_config)
+            else:
+                # Fallback basic config
+                self.config = {"type": llm_config}
+        else:
+            self.config = llm_config
+        
+        # Validate setup
+        if CONFIG_AVAILABLE:
+            is_valid, error = validate_llm_setup(self.config)
+            if not is_valid:
+                print(f"❌ LLM setup issue: {error}")
+                print_setup_instructions(self.config.get("type"))
+                raise ValueError(f"LLM setup failed: {error}")
         
         # Initialize the safe database connection
         self.db = SafeSQLDatabase.from_uri(f"sqlite:///{db_path}")
         
-        # Initialize OpenAI LLM
-        self.llm = OpenAI(
-            openai_api_key=openai_api_key,
-            model_name=model_name,
-            temperature=0
-        )
+        # Initialize LLM based on config
+        self.llm = self._initialize_llm_from_config()
         
         # Create SQL toolkit
         self.toolkit = SQLDatabaseToolkit(db=self.db, llm=self.llm)
@@ -200,6 +247,80 @@ class HackathonSQLAgent:
             - Be careful with patient data - aggregate when possible
             """
         )
+    
+    def _initialize_llm_from_config(self):
+        """Initialize LLM based on configuration"""
+        llm_type = self.config.get("type", "openai")
+        
+        if llm_type == "openai":
+            if not OPENAI_AVAILABLE:
+                raise ImportError("OpenAI not available. Install with: pip install langchain-openai")
+            
+            api_key = os.getenv(self.config.get("api_key_env", "OPENAI_API_KEY"))
+            if not api_key:
+                raise ValueError(f"Missing {self.config.get('api_key_env', 'OPENAI_API_KEY')} environment variable")
+            
+            return OpenAI(
+                openai_api_key=api_key,
+                model_name=self.config.get("model_name", "gpt-3.5-turbo"),
+                temperature=self.config.get("temperature", 0),
+                max_tokens=self.config.get("max_tokens", 2000)
+            )
+        
+        elif llm_type == "ollama":
+            if not OLLAMA_AVAILABLE:
+                raise ImportError("Ollama not available. Install with: pip install langchain-ollama")
+            
+            return Ollama(
+                model=self.config.get("model", "llama3.1"),
+                base_url=self.config.get("base_url", "http://localhost:11434"),
+                temperature=self.config.get("temperature", 0)
+            )
+        
+        elif llm_type == "llamacpp":
+            if not LLAMACPP_AVAILABLE:
+                raise ImportError("LlamaCpp not available. Install with: pip install llama-cpp-python")
+            
+            model_path = self.config.get("model_path")
+            if not model_path or not os.path.exists(model_path):
+                raise ValueError(f"Model file not found: {model_path}")
+            
+            return LlamaCpp(
+                model_path=model_path,
+                temperature=self.config.get("temperature", 0),
+                max_tokens=self.config.get("max_tokens", 2000),
+                n_ctx=self.config.get("n_ctx", 4096),
+                verbose=self.config.get("verbose", False)
+            )
+        
+        elif llm_type == "huggingface":
+            if not HUGGINGFACE_AVAILABLE:
+                raise ImportError("HuggingFace not available. Install with: pip install transformers torch")
+            
+            model_name = self.config.get("model_name", "microsoft/DialoGPT-medium")
+            
+            try:
+                tokenizer = AutoTokenizer.from_pretrained(model_name)
+                model = AutoModelForCausalLM.from_pretrained(model_name)
+                
+                pipe = pipeline(
+                    "text-generation",
+                    model=model,
+                    tokenizer=tokenizer,
+                    max_new_tokens=self.config.get("max_tokens", 512),
+                    temperature=self.config.get("temperature", 0.1)
+                )
+                
+                return HuggingFacePipeline(pipeline=pipe)
+            except Exception as e:
+                raise RuntimeError(f"Failed to load HuggingFace model {model_name}: {e}")
+        
+        else:
+            raise ValueError(f"Unsupported LLM type: {llm_type}")
+    
+    def get_config_info(self) -> str:
+        """Get information about current configuration"""
+        return f"Using {self.config.get('type')} with config: {self.config}"
     
     def get_schema_info(self) -> str:
         """Get database schema information"""
@@ -247,15 +368,7 @@ class HackathonSQLAgent:
 
 # Example usage and setup
 def main():
-    """Main function to demonstrate the SQL agent"""
-    
-    # Get OpenAI API key from environment
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-    if not OPENAI_API_KEY:
-        print("❌ Error: Please set your OPENAI_API_KEY in the .env file")
-        print("1. Copy .env.example to .env")
-        print("2. Add your OpenAI API key to the .env file")
-        return
+    """Main function to demonstrate the SQL agent with config management"""
     
     print("🏥 Healthcare SQL Agent Hackathon")
     print("=" * 50)
@@ -264,12 +377,81 @@ def main():
     print("📊 Creating healthcare database...")
     create_sample_database()
     
-    # Initialize the agent
-    print("🤖 Initializing AI agent...")
-    agent = HackathonSQLAgent(
-        db_path="healthcare_hackathon.db"
-        # API key will be loaded from .env automatically
-    )
+    if CONFIG_AVAILABLE:
+        print("\n🤖 Available Models:")
+        list_available_models()
+        
+        print(f"\n🎯 Using default model: {DEFAULT_LLM}")
+        print("   (Change DEFAULT_LLM in config.py to switch)")
+        
+        # Initialize with default config
+        try:
+            agent = HackathonSQLAgent("healthcare_hackathon.db")
+            print(f"✅ Agent initialized: {agent.get_config_info()}")
+            
+            # Test a simple query
+            print("\n🧪 Testing query...")
+            result = agent.query("How many diagnosis claims are there?")
+            print(f"Result: {result}")
+            
+        except Exception as e:
+            print(f"❌ Agent initialization failed: {e}")
+            print("\n💡 Try these solutions:")
+            print("1. Check config.py settings")
+            print("2. Run setup instructions for your chosen model")
+            print("3. Use 'python config.py' to see model status")
+    
+    else:
+        print("\n⚠️  config.py not found - using basic setup")
+        print("Create config.py for advanced model management")
+
+def demo_model_switching():
+    """Demonstrate how to switch between models"""
+    if not CONFIG_AVAILABLE:
+        print("config.py required for model switching demo")
+        return
+    
+    print("\n🔄 Model Switching Demo")
+    print("=" * 30)
+    
+    models_to_try = ["free", "fast", "offline"]  # Aliases from config
+    
+    for model_alias in models_to_try:
+        try:
+            print(f"\n📍 Trying {model_alias} model...")
+            agent = HackathonSQLAgent("healthcare_hackathon.db", llm_config=model_alias)
+            print(f"✅ {model_alias} model working: {agent.get_config_info()}")
+        except Exception as e:
+            print(f"❌ {model_alias} model failed: {e}")
+
+if __name__ == "__main__":
+    # Run the main demo
+    main()
+    
+    # Optional: Demo model switching
+    # demo_model_switching()
+    
+    print("\n" + "="*60)
+    print("🚀 QUICK START EXAMPLES")
+    print("="*60)
+    print("""
+# Use default model (set in config.py)
+agent = HackathonSQLAgent("healthcare_hackathon.db")
+
+# Use specific model
+agent = HackathonSQLAgent("healthcare_hackathon.db", llm_config="ollama")
+
+# Use alias for easy switching
+agent = HackathonSQLAgent("healthcare_hackathon.db", llm_config="free")
+
+# Check what models are available
+python config.py
+
+# Query examples
+agent.query("How many prescriptions were filled?")
+agent.query("Which specialty has the most patients?")
+agent.query("Show me diabetes-related prescriptions")
+""")
     
     # Print schema information
     print("Database Schema:")

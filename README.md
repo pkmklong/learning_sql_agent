@@ -7,9 +7,24 @@ Query healthcare data with natural language using LangChain! Now supports multip
 ```bash
 git clone <your-repo-url>
 cd healthcare-sql-agent
+
+# Create virtual environment (recommended)
+python -m venv healthcare-ai-env
+
+# Activate virtual environment
+# On macOS/Linux:
+source healthcare-ai-env/bin/activate
+# On Windows:
+healthcare-ai-env\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
+
+# Setup environment (optional - only needed for OpenAI)
 cp .env.example .env
-# Add your OpenAI API key to .env (optional - only needed for OpenAI)
+# Add your OpenAI API key to .env if using OpenAI
+
+# Run the agent
 python healthcare_agent.py
 ```
 
@@ -47,7 +62,7 @@ python config.py
 curl -fsSL https://ollama.ai/install.sh | sh
 
 # Pull a model
-ollama pull llama3.1
+ollama pull llama3.2
 
 # Start server
 ollama serve

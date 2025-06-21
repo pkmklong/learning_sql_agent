@@ -22,7 +22,7 @@ LLM_CONFIGS = {
     
     "ollama": {
         "type": "ollama", 
-        "model": "llama3.1",  # or "codellama", "llama3.1:70b", etc.
+        "model": "llama3.2",  # or "codellama", "llama3.1:70b", etc.
         "base_url": "http://localhost:11434",
         "temperature": 0,
         "requires_api_key": False,

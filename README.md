@@ -2,6 +2,17 @@
 
 Query healthcare data with natural language using LangChain! Now supports multiple LLM options including **free local models**.
 
+## 🎯 Training Objectives
+
+This tutorial provides a lightweight orientation to **LLM/Agent development** with practical database querying as the core example. Many hackathon projects will require database interactions, making this a valuable foundational skill.
+
+### 💡 What You'll Learn:
+1. **LLM Agent Architecture** - How agents reason and use tools
+2. **Database Security** - Safe SQL query practices with LLMs
+3. **Multi-Model Support** - Switching between local and cloud LLMs
+4. **Healthcare Data Patterns** - Real-world domain modeling
+5. **Configuration Management** - Clean, maintainable setups
+
 ## 🚀 Quick Setup
 
 ```bash
@@ -24,6 +35,9 @@ pip install -r requirements.txt
 cp .env.example .env
 # Add your OpenAI API key to .env if using OpenAI
 
+# Create database
+python setup_database.py
+
 # Run the agent
 python healthcare_agent.py
 ```
@@ -33,9 +47,7 @@ python healthcare_agent.py
 | Model | Type | Cost | Setup Difficulty | Best For |
 |-------|------|------|------------------|----------|
 | **Ollama** | Local | Free | ⭐⭐ | **Recommended starter** |
-| OpenAI GPT | API | $$ | ⭐ | Fast & accurate |
-| LlamaCpp | Local | Free | ⭐⭐⭐ | Offline use |
-| HuggingFace | Local | Free | ⭐⭐ | Lightweight |
+| OpenAI GPT | API | $ | ⭐ | Fast & accurate |
 
 ## ⚡ Quick Start Examples
 
@@ -44,11 +56,8 @@ python healthcare_agent.py
 agent = HackathonSQLAgent("healthcare_hackathon.db")
 
 # Switch models easily
-agent = HackathonSQLAgent("healthcare_hackathon.db", llm_config="ollama")
-
-# Use aliases for quick switching
-agent = HackathonSQLAgent("healthcare_hackathon.db", llm_config="free")    # -> Ollama
-agent = HackathonSQLAgent("healthcare_hackathon.db", llm_config="fast")   # -> OpenAI
+agent = HackathonSQLAgent("healthcare_hackathon.db", "ollama")
+agent = HackathonSQLAgent("healthcare_hackathon.db", "openai")
 
 # Check available models
 python config.py
@@ -56,7 +65,7 @@ python config.py
 
 ## 🆓 Free Local Setup (Recommended)
 
-### Option 1: Ollama (Easiest)
+### Ollama Setup
 ```bash
 # Install Ollama
 curl -fsSL https://ollama.ai/install.sh | sh
@@ -68,18 +77,7 @@ ollama pull llama3.2
 ollama serve
 
 # Update config.py
-DEFAULT_LLM = "ollama"
-```
-
-### Option 2: LlamaCpp (Offline)
-```bash
-# Install
-pip install llama-cpp-python
-
-# Download model
-wget https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGML/resolve/main/llama-2-7b-chat.q4_0.bin
-
-# Update model path in config.py
+DEFAULT_MODEL = "ollama"
 ```
 
 ## 📊 What You Get
@@ -117,98 +115,294 @@ healthcare-sql-agent/
 ├── requirements.txt          # Python dependencies  
 ├── .env.example             # Environment template
 ├── config.py                # 🎯 Model configurations
+├── setup_database.py        # Database creation script
 ├── healthcare_agent.py      # Main agent code
 └── healthcare_hackathon.db  # Auto-generated database
 ```
 
-## 🛠️ Configuration Management
+## 🏗️ Architecture Choices (Learning-Focused)
 
-All model settings are managed in `config.py`:
+This codebase prioritizes **LEARNING** and **RAPID PROTOTYPING** over production patterns:
+
+### ✅ Chosen for Learning:
+- **Single file agent class** (easy to understand)
+- **Simple configuration** (config.py with Pydantic) 
+- **Direct imports** (clear dependencies)
+- **Minimal abstraction** (see exactly what's happening)
+- **SQLite database** (no external dependencies)
+
+### ❌ Trade-offs Made:
+- No dependency injection (harder to test)
+- Basic error handling (production needs more robust)
+- No logging framework (just print statements)
+- No async support (production agents often async)
+- Limited observability (no tracing/monitoring)
+
+## 🚀 Production Evolution Path
+
+To evolve this codebase toward production best practices:
+
+<details>
+<summary><b>1. Dependency Injection & Testing</b></summary>
 
 ```python
-# Switch default model
-DEFAULT_LLM = "ollama"  # Options: "openai", "ollama", "llamacpp", "huggingface"
+class SQLAgent:
+    def __init__(self, llm: BaseLLM, db: BaseDatabase, safety: SafetyChecker):
+        # Inject dependencies for easier testing
 
-# Quick aliases
-MODEL_ALIASES = {
-    "fast": "openai",      # Fast but costs money
-    "free": "ollama",      # Free and good balance  
-    "offline": "llamacpp", # Completely offline
-    "light": "huggingface" # Lightweight option
-}
+class TestSQLAgent:
+    def test_query_safety(self):
+        mock_llm = MockLLM()
+        mock_db = MockDatabase() 
+        agent = SQLAgent(mock_llm, mock_db, safety_checker)
 ```
-
-## 🔧 Model-Specific Setup
-
-<details>
-<summary><b>🦙 Ollama Setup (Recommended)</b></summary>
-
-```bash
-# 1. Install Ollama
-curl -fsSL https://ollama.ai/install.sh | sh
-
-# 2. Pull models
-ollama pull llama3.1      # General purpose (~4GB)
-ollama pull codellama     # Better for SQL (~4GB) 
-
-# 3. Start server
-ollama serve
-
-# 4. Test
-python -c "
-agent = HackathonSQLAgent('healthcare_hackathon.db', 'ollama')
-print(agent.query('How many claims are there?'))
-"
-```
-
-**Benefits:**
-- ✅ 100% free and local
-- ✅ No API keys needed
-- ✅ Privacy-focused
-- ✅ Works offline
 </details>
 
 <details>
-<summary><b>💰 OpenAI Setup</b></summary>
+<summary><b>2. Structured Logging & Observability</b></summary>
 
-```bash
-# 1. Get API key from https://platform.openai.com/api-keys
+```python
+import structlog
 
-# 2. Add to .env file
-echo "OPENAI_API_KEY=sk-your-key-here" >> .env
+logger = structlog.get_logger()
 
-# 3. Set in config.py
-DEFAULT_LLM = "openai"
+def query(self, question: str):
+    logger.info("query_started", question=question, model=self.model_type)
+    # ... query logic
+    logger.info("query_completed", duration=elapsed, tokens_used=tokens)
 ```
-
-**Benefits:**
-- ✅ Fastest and most accurate
-- ✅ Easiest setup
-- ❌ Costs money per query
 </details>
 
 <details>
-<summary><b>🔧 LlamaCpp Setup (Advanced)</b></summary>
+<summary><b>3. Async Support & Concurrency</b></summary>
 
-```bash
-# 1. Install
-pip install llama-cpp-python
+```python
+async def query_async(self, question: str) -> str:
+    async with self.llm_session() as session:
+        result = await session.arun(question)
+    return result
+```
+</details>
 
-# 2. Download model
-mkdir models
-cd models
-wget https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGML/resolve/main/llama-2-7b-chat.q4_0.bin
+<details>
+<summary><b>4. Error Handling & Retries</b></summary>
 
-# 3. Update config.py
-"model_path": "./models/llama-2-7b-chat.q4_0.bin"
+```python
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential())
+async def robust_query(self, question: str):
+    # Automatic retries with exponential backoff
+```
+</details>
+
+<details>
+<summary><b>5. Metrics & Monitoring</b></summary>
+
+```python
+from prometheus_client import Counter, Histogram
+
+query_counter = Counter('agent_queries_total', ['status', 'model'])
+query_duration = Histogram('agent_query_duration_seconds')
+```
+</details>
+
+## 🔄 Alternative Frameworks & Approaches
+
+### 1. LangGraph (Current Best Practice 2025)
+```python
+from langgraph.graph import StateGraph, END
+from langgraph.prebuilt import ToolNode
+
+# Define workflow state
+class QueryState(TypedDict):
+    question: str
+    sql_query: str
+    results: str
+    
+# Create workflow graph
+workflow = StateGraph(QueryState)
+workflow.add_node("analyze_question", analyze_question_node)
+workflow.add_node("generate_sql", generate_sql_node)
+workflow.add_node("validate_sql", validate_sql_node)
+workflow.add_node("execute_query", execute_query_node)
+
+# Better control flow, error handling, human-in-loop
 ```
 
-**Benefits:**
-- ✅ Completely offline
-- ✅ No internet required after download
-- ✅ High performance
-- ❌ Larger setup
+### 2. LangChain Chains (Simpler, More Direct)
+```python
+from langchain.chains import create_sql_query_chain
+
+# More direct, less flexible than agents
+chain = create_sql_query_chain(llm, db)
+result = chain.invoke({"question": "How many patients?"})
+```
+
+### 3. Custom Frameworks
+```python
+# Semantic Kernel (Microsoft)
+import semantic_kernel as sk
+
+# AutoGen (Multi-agent conversations)
+from autogen import AssistantAgent, UserProxyAgent
+
+# CrewAI (Role-based agents)
+from crewai import Agent, Task, Crew
+```
+
+## 🎯 Choosing the Right Approach
+
+| Use Case | Recommended Approach |
+|----------|---------------------|
+| **Hackathons** | This tutorial setup (rapid prototyping) |
+| **Simple Projects** | LangChain Chains |
+| **Production Systems** | LangGraph (complex workflows, human oversight) |
+| **Custom Requirements** | Direct API calls (maximum control) |
+| **Learning** | Start here → LangGraph → Custom frameworks |
+
+## 🔧 Extending the Codebase
+
+### 📁 Suggested Directory Structure for Extensions
+
+<details>
+<summary><b>Basic Extension Structure</b></summary>
+
+```
+healthcare-sql-agent/
+├── core/                     # Core agent functionality
+│   ├── __init__.py
+│   ├── agent.py             # Main agent class
+│   ├── database.py          # Database utilities
+│   ├── safety.py            # Security wrappers
+│   └── config.py            # Configuration management
+│
+├── models/                   # LLM model integrations
+│   ├── __init__.py
+│   ├── base.py              # Abstract base classes
+│   ├── ollama.py            # Ollama integration
+│   ├── openai.py            # OpenAI integration
+│   └── custom.py            # Custom model support
+│
+├── data/                     # Data management
+│   ├── __init__.py
+│   ├── schemas/             # Database schemas
+│   ├── generators/          # Data generation tools
+│   └── healthcare_hackathon.db
+│
+├── tools/                    # Agent tools and utilities
+│   ├── __init__.py
+│   ├── sql_tools.py         # SQL query tools
+│   ├── validation.py        # Query validation
+│   └── formatting.py       # Result formatting
+│
+├── examples/                 # Usage examples
+│   ├── basic_usage.py
+│   ├── advanced_queries.py
+│   └── custom_domains.py
+│
+├── tests/                    # Test suite
+│   ├── __init__.py
+│   ├── test_agent.py
+│   ├── test_safety.py
+│   └── test_integration.py
+│
+└── scripts/                  # Setup and utility scripts
+    ├── setup_database.py
+    ├── benchmark_models.py
+    └── generate_data.py
+```
 </details>
+
+<details>
+<summary><b>Production-Ready Structure</b></summary>
+
+```
+healthcare-sql-agent/
+├── src/
+│   ├── healthcare_agent/
+│   │   ├── __init__.py
+│   │   ├── core/            # Core business logic
+│   │   │   ├── agent.py
+│   │   │   ├── database.py
+│   │   │   └── safety.py
+│   │   ├── models/          # LLM integrations
+│   │   ├── tools/           # Agent tools
+│   │   ├── utils/           # Utilities
+│   │   └── config/          # Configuration
+│   │       ├── settings.py
+│   │       └── models.py
+│
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   └── performance/
+│
+├── docs/
+│   ├── api/
+│   ├── tutorials/
+│   └── deployment/
+│
+├── deployment/
+│   ├── docker/
+│   ├── kubernetes/
+│   └── terraform/
+│
+├── monitoring/
+│   ├── prometheus/
+│   └── grafana/
+│
+└── scripts/
+    ├── setup/
+    ├── maintenance/
+    └── migration/
+```
+</details>
+
+### 🛠️ Extension Patterns
+
+#### 1. **Different Data Sources**
+```python
+# Replace SQLDatabase with:
+src/healthcare_agent/datasources/
+├── sql.py          # PostgreSQL/MySQL
+├── nosql.py        # MongoDB  
+├── api.py          # REST/GraphQL endpoints
+├── vector.py       # Pinecone, Weaviate
+└── warehouse.py    # Snowflake, BigQuery
+```
+
+#### 2. **Different Domains**
+```python
+# Adapt for different industries:
+src/healthcare_agent/domains/
+├── healthcare.py   # Medical data (current)
+├── finance.py      # Financial compliance
+├── hr.py          # Human resources
+├── retail.py      # Customer analytics
+└── scientific.py  # Research data
+```
+
+#### 3. **Different Interaction Patterns**
+```python
+# Beyond Q&A:
+src/healthcare_agent/interfaces/
+├── chat.py         # Interactive chat
+├── api.py          # REST API endpoints
+├── batch.py        # Batch processing
+├── streaming.py    # Real-time streaming
+└── visualization.py # Chart generation
+```
+
+## 📖 Recommended Learning Path
+
+1. **Complete this tutorial** - understand the basics
+2. **Modify the healthcare domain** - try different medical scenarios
+3. **Add new safety rules** - practice security thinking
+4. **Try different models** - compare Ollama vs OpenAI performance
+5. **Implement LangGraph version** - learn modern patterns
+6. **Add observability** - practice production thinking
+7. **Build your own domain** - apply to your specific use case
 
 ## 🛡️ Security Features
 
@@ -255,47 +449,44 @@ python config.py
 ollama list
 ```
 
-**"API key missing"**
+**"Database not found"**
 ```bash
-# Check environment
-echo $OPENAI_API_KEY
-
-# Verify .env file
-cat .env
+# Create database
+python setup_database.py
 ```
 
 **"Import errors"**
 ```bash
 # Install missing packages
 pip install -r requirements.txt
-
-# For specific models
-pip install langchain-ollama      # Ollama
-pip install llama-cpp-python     # LlamaCpp
-pip install transformers torch   # HuggingFace
 ```
 
 ## 💡 Pro Tips
 
 1. **Start with Ollama** - Best balance of free + performance
-2. **Use aliases** - `llm_config="free"` is easier than full config
+2. **Use simple queries first** - Build complexity gradually
 3. **Check model status** - Run `python config.py` to see what's working
-4. **Switch easily** - Change `DEFAULT_LLM` in config.py to try different models
+4. **Switch easily** - Change `DEFAULT_MODEL` in config.py to try different models
 5. **Local = Privacy** - Healthcare data never leaves your machine with local models
 
-## 🤝 Contributing
+## 🤝 Contributing to Team Knowledge
 
-Got ideas for new models or features? Open an issue or submit a PR!
+After the hackathon, consider:
+- Documenting patterns you discovered
+- Sharing model performance comparisons
+- Contributing safety improvements
+- Building domain-specific extensions
 
 ## 📚 Learning Resources
 
 - [LangChain Documentation](https://python.langchain.com/)
+- [LangGraph Tutorials](https://langchain-ai.github.io/langgraph/)
 - [Healthcare Data Analytics](https://www.healthcatalyst.com/insights/healthcare-analytics-101)
 - [ICD-10 Codes](https://www.icd10data.com/)
 - [NDC Drug Codes](https://www.fda.gov/drugs/drug-approvals-and-databases/national-drug-code-directory)
 
 ---
 
-**Happy Hacking!** 🚀
+**Remember: This tutorial is your starting point, not your destination!**
 
-*Build something amazing with healthcare AI!*
+*Build something amazing with healthcare AI!* 🚀

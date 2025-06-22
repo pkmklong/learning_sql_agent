@@ -34,7 +34,7 @@ class SafeSQLDatabase(SQLDatabase):
         'TRUNCATE', 'REPLACE', 'MERGE', 'UPSERT', 'EXEC', 'EXECUTE'
     ]
     
-    def run(self, command: str, fetch: str = "all") -> str:
+    def run(self, command: str, fetch: str = "all", **kwargs) -> str:
         """Override run method to add safety checks"""
         # Check for forbidden keywords
         command_upper = command.upper()
@@ -42,8 +42,8 @@ class SafeSQLDatabase(SQLDatabase):
             if keyword in command_upper:
                 return f"Error: '{keyword}' operations are not allowed for security reasons."
         
-        # If safe, execute the query
-        return super().run(command, fetch)
+        # If safe, execute the query (accept any additional kwargs)
+        return super().run(command, fetch, **kwargs)
 
 class HackathonSQLAgent:
     """
@@ -118,14 +118,23 @@ class HackathonSQLAgent:
     def query(self, question: str) -> str:
         """Query the database with natural language"""
         try:
-            context = f"""
-            Healthcare database query: {question}
+            # Use invoke instead of deprecated run method
+            result = self.agent_executor.invoke({
+                "input": f"""
+                Healthcare database query: {question}
+                
+                Database schema: {self.get_schema_info()}
+                
+                Remember: Only SELECT queries. Focus on healthcare analytics.
+                """
+            })
             
-            Database schema: {self.get_schema_info()}
-            
-            Remember: Only SELECT queries. Focus on healthcare analytics.
-            """
-            return self.agent_executor.run(context)
+            # Extract the output from the result
+            if isinstance(result, dict) and "output" in result:
+                return result["output"]
+            else:
+                return str(result)
+                
         except Exception as e:
             return f"Query failed: {str(e)}"
     

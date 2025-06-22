@@ -194,20 +194,9 @@ def main():
         # Show tables
         print(f"\n📋 {agent.get_tables()}")
         
-        # Test queries
-        test_queries = [
-            "How many diagnosis claims are there?",
-            "How many prescriptions are there?",
-            "How many providers are there?"
-        ]
-        
-        for query in test_queries:
-            print(f"\n❓ {query}")
-            result = agent.query(query)
-            print(f"✅ {result}")
-        
-        print("\n💡 Try these queries:")
+        print("\n💡 Example questions you can ask:")
         examples = [
+            "How many diagnosis claims are there?",
             "What are the top 3 diagnosis codes?",
             "How many claims per specialty?",
             "What medications are prescribed most?",
@@ -215,12 +204,38 @@ def main():
         ]
         
         for i, example in enumerate(examples, 1):
-            print(f"   {i}. agent.query('{example}')")
+            print(f"   {i}. {example}")
         
-        print(f"\n🔧 Interactive Mode:")
-        print("   agent = SimpleHealthcareAgent('{db_path}')")
-        print("   result = agent.query('Your question here')")
-        print("   agent.close()  # When done")
+        # Interactive mode
+        print("\n" + "="*50)
+        print("🎮 ASK YOUR QUESTIONS!")
+        print("Type 'quit', 'exit', or 'done' to stop")
+        print("="*50)
+        
+        while True:
+            try:
+                # Get user input
+                user_question = input("\n❓ Your question: ").strip()
+                
+                # Check for exit commands
+                if user_question.lower() in ['quit', 'exit', 'done', 'q']:
+                    print("👋 Thanks for using the healthcare agent!")
+                    break
+                
+                # Skip empty questions
+                if not user_question:
+                    continue
+                
+                # Process the question
+                print("🤖 Thinking...")
+                result = agent.query(user_question)
+                print(f"✅ {result}")
+                
+            except KeyboardInterrupt:
+                print("\n👋 Exiting... Thanks for using the healthcare agent!")
+                break
+            except Exception as e:
+                print(f"❌ Error: {e}")
         
         # Clean up
         agent.close()

@@ -1,14 +1,19 @@
-# Core LangChain packages
-langchain>=0.1.0
-langchain-community>=0.0.20
-python-dotenv>=1.0.0
+# Core LangChain packages (updated for latest versions)
+langchain>=0.2.0
+langchain-community>=0.2.0
+langchain-core>=0.2.0
 
-# Configuration with validation
-pydantic>=2.0.0
-
-# Ollama support (free local models)
+# LLM integrations
+langchain-openai>=0.1.0
 langchain-ollama>=0.1.0
 
-# OpenAI support (paid API)
-langchain-openai>=0.0.8
-openai>=1.0.0
+# Database utilities
+sqlalchemy>=2.0.0
+
+# Configuration and environment
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+
+# Optional but recommended for better SQL support
+pymysql>=1.1.0
+psycopg2-binary>=2.9.0

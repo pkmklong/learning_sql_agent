@@ -1,4 +1,3 @@
-
 """
 Healthcare SQL Agent - LLM Agent for querying medical data
 Supports Ollama (free/local) and OpenAI (paid/cloud) models
@@ -9,16 +8,18 @@ import re
 import os
 from typing import Optional, List, Dict, Any, Union
 from dotenv import load_dotenv
-from langchain.agents import create_sql_agent
-from langchain.agents.agent_toolkits import SQLDatabaseToolkit
-from langchain.sql_database import SQLDatabase
+
+# Fixed LangChain imports for latest version
+from langchain_community.agent_toolkits.sql.base import create_sql_agent
+from langchain_community.agent_toolkits.sql.toolkit import SQLDatabaseToolkit
+from langchain_community.utilities import SQLDatabase
 
 # Config should always exist
 from config import get_model_config, check_model_ready, list_models, DEFAULT_MODEL
 
-# LLM imports - should be available from requirements.txt
+# LLM imports - updated for latest versions
 from langchain_openai import ChatOpenAI
-from langchain_ollama import Ollama
+from langchain_ollama import OllamaLLM  # Fixed: was 'Ollama', should be 'OllamaLLM'
 
 # Load environment variables
 load_dotenv()
@@ -94,7 +95,7 @@ class HackathonSQLAgent:
     def _setup_llm(self):
         """Initialize the LLM based on validated config"""
         if self.config.type == "ollama":
-            return Ollama(
+            return OllamaLLM(  # Fixed: was 'Ollama', now 'OllamaLLM'
                 model=self.config.model,
                 base_url=self.config.base_url,
                 temperature=self.config.temperature
@@ -183,7 +184,7 @@ def main():
         print(f"❌ Setup failed: {e}")
         print("\n🔧 Troubleshooting:")
         print("   • Database: python setup_database.py")
-        print("   • Ollama: ollama pull llama3.2")  
+        print("   • Ollama: ollama pull llama3.2:latest")  
         print("   • OpenAI: Add OPENAI_API_KEY to .env")
         print("   • Config: python config.py")
 

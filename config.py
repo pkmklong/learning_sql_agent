@@ -16,7 +16,7 @@ class ModelConfig(BaseModel):
 class OllamaConfig(ModelConfig):
     """Ollama local model settings"""
     type: str = "ollama"
-    model: str = "llama3.2:latest"
+    model: str = "llama3.2"
     base_url: str = "http://localhost:11434"
 
 class OpenAIConfig(ModelConfig):

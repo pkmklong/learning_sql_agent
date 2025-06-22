@@ -7,12 +7,12 @@ Query healthcare data with natural language using LangChain! Now supports multip
 This tutorial provides a lightweight orientation to **LLM/Agent development** with practical database querying as the core example. Many hackathon projects will require database interactions, making this a valuable foundational skill.
 
 ### 💡 What You'll Learn:
-1. **LLM Agent Architecture** - How agents reason and use tools
-2. **Database Security** - Safe SQL query practices with LLMs
+1. **LLM-to-SQL Translation** - How to convert natural language to database queries
+2. **Database Security** - Safe query practices with LLMs
 3. **Multi-Model Support** - Switching between local and cloud LLMs
 4. **Healthcare Data Patterns** - Real-world domain modeling
 5. **Configuration Management** - Clean, maintainable setups
-6. **SQLDatabaseToolkit** - How LLMs intelligently interact with databases
+6. **Simple vs Complex** - When to choose reliability over sophistication
 
 ## 🚀 Quick Setup
 
@@ -81,39 +81,34 @@ ollama serve
 DEFAULT_MODEL = "ollama"
 ```
 
-## 🧠 How It Works: SQLDatabaseToolkit
+## 🧠 How It Works: Simple and Reliable
 
-Ever wonder how an LLM can magically understand your database and write correct SQL? The secret is **SQLDatabaseToolkit** - LangChain's Swiss Army knife for database interactions.
+We've built this to be **simple and reliable** rather than complex. Here's how it works:
 
-### **🔄 The Agent's Thought Process**
+### **🔄 The Simple Process**
 
-When you ask: *"Which specialty has the most claims?"*
+When you ask: *"How many diabetes patients are there?"*
 
-1. **🔍 Explore**: *"What tables exist in this database?"*
-   - Uses `ListSQLDatabaseTool` → Finds: `dx_claims`, `rx_prescriptions`, `providers`
-
-2. **📋 Inspect**: *"What columns does dx_claims have?"*
-   - Uses `InfoSQLDatabaseTool` → Gets schema: `provider_specialty`, `claim_id`, etc.
-
-3. **⚡ Execute**: *"Let me write and run the SQL"*
-   - Uses `QuerySQLDataBaseTool` → Generates: `SELECT provider_specialty, COUNT(*) FROM dx_claims GROUP BY provider_specialty ORDER BY COUNT(*) DESC`
-
-4. **🔧 Recover**: *"Oops, that failed. Let me fix it and try again"*
-   - Automatically rewrites queries when errors occur
+1. **🤖 LLM Prompt**: Convert your question to SQL using the database schema
+2. **⚡ Safety Check**: Ensure only SELECT queries (no dangerous operations)
+3. **🔍 Execute**: Run the SQL directly against the database
+4. **📊 Format**: Return clean, readable results
 
 ### **🛡️ Safety First**
 
-The toolkit includes built-in protections, plus we've added our own `SafeSQLDatabase` wrapper that blocks dangerous operations like `DROP`, `DELETE`, and `UPDATE` - keeping your data secure while enabling natural language queries.
+- **Read-only queries** - Only SELECT statements allowed
+- **No dangerous operations** - Blocks DROP, DELETE, UPDATE, etc.
+- **Direct execution** - No complex agent loops that can get confused
+- **Visible SQL** - You can see exactly what queries are generated
 
-### **🎯 Why This Matters for Training**
+### **🎯 Why This Approach Works**
 
-Understanding SQLDatabaseToolkit teaches you:
-- **How agents break down complex tasks** into tool-based steps
-- **Error handling patterns** in LLM applications  
-- **Security considerations** when giving LLMs database access
-- **Tool composition** - how multiple specialized tools work together
+- **Reliability over complexity** - Simple systems are more predictable
+- **Fast development** - No debugging complex agent workflows  
+- **Easy to understand** - Clear path from question → SQL → result
+- **Production-ready** - This pattern works in real applications
 
-This pattern applies beyond databases - you'll see similar toolkits for APIs, file systems, web browsing, and more!
+This demonstrates a key principle: **sometimes the simplest solution is the best solution**, especially when you need something that reliably works under pressure! 🎯
 
 ## 📊 What You Get
 
@@ -407,18 +402,7 @@ src/healthcare_agent/datasources/
 └── warehouse.py    # Snowflake, BigQuery
 ```
 
-#### 2. **Different Domains**
-```python
-# Adapt for different industries:
-src/healthcare_agent/domains/
-├── healthcare.py   # Medical data (current)
-├── finance.py      # Financial compliance
-├── hr.py          # Human resources
-├── retail.py      # Customer analytics
-└── scientific.py  # Research data
-```
-
-#### 3. **Different Interaction Patterns**
+#### 2. **Different Interaction Patterns**
 ```python
 # Beyond Q&A:
 src/healthcare_agent/interfaces/

@@ -19,7 +19,7 @@ from config import get_model_config, check_model_ready, list_models, DEFAULT_MOD
 
 # LLM imports - updated for latest versions
 from langchain_openai import ChatOpenAI
-from langchain_ollama import OllamaLLM  # Fixed: was 'Ollama', should be 'OllamaLLM'
+from langchain_ollama import OllamaLLM
 
 # Load environment variables
 load_dotenv()
@@ -71,31 +71,32 @@ class HackathonSQLAgent:
         # Initialize LLM
         self.llm = self._setup_llm()
         
-        # Create agent
-        self.toolkit = SQLDatabaseToolkit(db=self.db, llm=self.llm)
+        # Create agent - simplified approach
         self.agent_executor = create_sql_agent(
             llm=self.llm,
-            toolkit=self.toolkit,
+            db=self.db,  # Pass db directly instead of toolkit
             verbose=True,
             agent_type="zero-shot-react-description",
+            max_iterations=10,  # Prevent infinite loops
             prefix="""You are a healthcare data analyst. Query medical claims and prescription data safely.
             
-            TABLES:
-            - dx_claims: diagnosis claims (ICD-10 codes, procedures)
+            Available tables:
+            - dx_claims: diagnosis claims (ICD-10 codes, procedures) 
             - rx_prescriptions: prescriptions (NDC codes, medications)
             - providers: healthcare provider information
             
-            RULES:
-            - Only SELECT queries allowed
-            - No UPDATE, DELETE, INSERT, DROP operations
-            - Focus on aggregate analysis for privacy
+            Important rules:
+            - Only use SELECT queries
+            - No UPDATE, DELETE, INSERT, DROP operations allowed
+            - Always check table schemas before writing queries
+            - Limit results to reasonable amounts
             """
         )
     
     def _setup_llm(self):
         """Initialize the LLM based on validated config"""
         if self.config.type == "ollama":
-            return OllamaLLM(  # Fixed: was 'Ollama', now 'OllamaLLM'
+            return OllamaLLM(
                 model=self.config.model,
                 base_url=self.config.base_url,
                 temperature=self.config.temperature
@@ -118,20 +119,12 @@ class HackathonSQLAgent:
     def query(self, question: str) -> str:
         """Query the database with natural language"""
         try:
-            # Use invoke instead of deprecated run method
-            result = self.agent_executor.invoke({
-                "input": f"""
-                Healthcare database query: {question}
-                
-                Database schema: {self.get_schema_info()}
-                
-                Remember: Only SELECT queries. Focus on healthcare analytics.
-                """
-            })
+            # Simple, direct approach - let the agent handle everything
+            result = self.agent_executor.invoke({"input": question})
             
             # Extract the output from the result
-            if isinstance(result, dict) and "output" in result:
-                return result["output"]
+            if isinstance(result, dict):
+                return result.get("output", str(result))
             else:
                 return str(result)
                 
@@ -167,7 +160,7 @@ def main():
         print(f"\n🚀 Starting agent with {DEFAULT_MODEL}...")
         agent = HackathonSQLAgent(db_path)
         
-        # Test query
+        # Test query - simple and direct
         print("\n🧪 Testing query...")
         result = agent.query("How many diagnosis claims are there?")
         print(f"✅ Result: {result}")

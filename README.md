@@ -59,7 +59,7 @@ agent = HackathonSQLAgent("healthcare_hackathon.db")
 agent = HackathonSQLAgent("healthcare_hackathon.db", "ollama")
 agent = HackathonSQLAgent("healthcare_hackathon.db", "openai")
 
-# Check available models
+# Check available models and their status
 python config.py
 ```
 
@@ -70,13 +70,13 @@ python config.py
 # Install Ollama
 curl -fsSL https://ollama.ai/install.sh | sh
 
-# Pull a model
-ollama pull llama3.2
+# Pull a model (matches config.py default)
+ollama pull llama3.2:latest
 
 # Start server
 ollama serve
 
-# Update config.py
+# Update config.py if needed
 DEFAULT_MODEL = "ollama"
 ```
 
@@ -442,10 +442,10 @@ providers (
 
 **"Model not found"**
 ```bash
-# Check available models
+# Check available models and their status
 python config.py
 
-# Verify Ollama is running
+# Verify Ollama is running and model is available
 ollama list
 ```
 
@@ -461,13 +461,23 @@ python setup_database.py
 pip install -r requirements.txt
 ```
 
+**"Ollama connection failed"**
+```bash
+# Make sure Ollama is running
+ollama serve
+
+# Check if model is pulled
+ollama pull llama3.2:latest
+```
+
 ## 💡 Pro Tips
 
 1. **Start with Ollama** - Best balance of free + performance
 2. **Use simple queries first** - Build complexity gradually
-3. **Check model status** - Run `python config.py` to see what's working
+3. **Check model status** - Run `python config.py` to see model availability and setup
 4. **Switch easily** - Change `DEFAULT_MODEL` in config.py to try different models
 5. **Local = Privacy** - Healthcare data never leaves your machine with local models
+6. **Consistent model names** - Use `llama3.2:latest` to match config.py defaults
 
 ## 🤝 Contributing to Team Knowledge
 

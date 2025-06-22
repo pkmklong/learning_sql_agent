@@ -1,6 +1,14 @@
+# Core LangChain packages
 langchain>=0.1.0
 langchain-community>=0.0.20
+python-dotenv>=1.0.0
+
+# Configuration with validation
+pydantic>=2.0.0
+
+# Ollama support (free local models)
+langchain-ollama>=0.1.0
+
+# OpenAI support (paid API)
 langchain-openai>=0.0.8
 openai>=1.0.0
-sqlite3
-python-dotenv>=1.0.0

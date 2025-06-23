@@ -13,6 +13,9 @@ from config import get_model_config, check_model_ready, list_models, DEFAULT_MOD
 from langchain_openai import ChatOpenAI
 from langchain_ollama import OllamaLLM
 
+# Modern prompt handling
+from langchain.prompts import ChatPromptTemplate
+
 # Load environment variables
 load_dotenv()
 
@@ -45,6 +48,24 @@ class SimpleHealthcareAgent:
         
         # Get schema info once
         self.schema = self._get_schema()
+        
+        # Create modern prompt template
+        self.prompt_template = ChatPromptTemplate.from_messages([
+            ("system", """You are a SQL expert for healthcare data analysis.
+            Convert natural language questions to SELECT queries.
+            
+            Database Schema:
+            {schema}
+            
+            Rules:
+            - Only use SELECT statements
+            - Return clean SQL without backticks or markdown
+            - Use proper SQLite syntax
+            - Keep queries simple and efficient
+            - Focus on the specific question asked"""),
+            
+            ("human", "{question}")
+        ])
     
     def _setup_llm(self):
         """Initialize the LLM based on validated config"""
@@ -104,26 +125,20 @@ class SimpleHealthcareAgent:
     def query(self, question: str) -> str:
         """Query the database with natural language"""
         try:
-            # Create a simple prompt
-            prompt = f"""
-You are a SQL expert. Convert this question to a SELECT query for a healthcare database.
-
-Database Schema:
-{self.schema}
-
-Question: {question}
-
-Rules:
-- Only use SELECT statements
-- Return just the SQL query, no explanation
-- Use proper SQLite syntax
-- Don't use backticks or markdown
-
-SQL Query:"""
+            # Use ChatPromptTemplate for structured prompting
+            messages = self.prompt_template.format_messages(
+                schema=self.schema,
+                question=question
+            )
             
             # Get SQL from LLM
-            response = self.llm.invoke(prompt)
-            sql = response.strip()
+            response = self.llm.invoke(messages)
+            
+            # Extract content based on response type
+            if hasattr(response, 'content'):
+                sql = response.content.strip()
+            else:
+                sql = str(response).strip()
             
             # Clean up the response (remove common formatting)
             sql = sql.replace('```sql', '').replace('```', '').strip()

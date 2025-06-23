@@ -75,8 +75,9 @@ class SimpleHealthcareAgent:
             Key Column Names (use exactly as shown):
             - rx_prescriptions.medication (NOT drug_name)
             - providers.specialty 
-            - dx_claims.claim_cost
+            - dx_claims.cost (NOT claim_cost)
             - dx_claims.diagnosis_code
+            - All tables have patient_id and provider_id for joins
             
             Example date queries:
             - Monthly grouping: SELECT strftime('%Y-%m', service_date) as month, COUNT(*) FROM table GROUP BY strftime('%Y-%m', service_date)
@@ -131,8 +132,10 @@ class SimpleHealthcareAgent:
         schema_info.append(f"\nImportant Columns:")
         schema_info.append(f"  - rx_prescriptions.medication (drug name)")
         schema_info.append(f"  - providers.specialty (provider specialty)")
-        schema_info.append(f"  - dx_claims.claim_cost (cost amount)")
+        schema_info.append(f"  - dx_claims.cost (claim cost amount, NOT claim_cost)")
         schema_info.append(f"  - dx_claims.diagnosis_code (medical condition)")
+        schema_info.append(f"  - dx_claims.patient_id, rx_prescriptions.patient_id (patient identifiers)")
+        schema_info.append(f"  - providers.provider_id (provider identifier)")
         
         return "\n".join(schema_info)
     

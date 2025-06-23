@@ -128,15 +128,6 @@ agent.query("Find patients with both cardiac diagnosis and medications")
 agent.query("What's the average cost per specialty?")
 ```
 
-## 🏆 Challenge Ideas
-
-| Level | Challenge | Description |
-|-------|-----------|-------------|
-| 🥉 **Basic** | Pattern Analysis | Find relationships between diagnoses and prescriptions |
-| 🥈 **Intermediate** | Provider Dashboard | Build analytics for provider performance |
-| 🥇 **Advanced** | Adherence Tracker | Create medication adherence monitoring |
-| 🏆 **Expert** | Multi-Agent System | Build coordinated healthcare analytics agents |
-
 ## 📁 Project Structure
 
 ```

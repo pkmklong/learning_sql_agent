@@ -57,12 +57,13 @@ DATABASE SCHEMA (use ONLY these exact column names):
 {schema}
 
 RULES:
-1. Use ONLY columns that exist in the schema above
-2. Return clean SQL without backticks
+1. Return ONLY the SQL query, no explanations
+2. Use ONLY columns that exist in the schema above
 3. Use SQLite syntax
 4. SELECT statements only
+5. If you can't answer with available columns, say "Missing column: [column_name]"
 
-If you need a column that doesn't exist, explain what's missing."""),
+Return just the SQL query."""),
             
             ("human", "{question}")
         ])
@@ -105,45 +106,35 @@ If you need a column that doesn't exist, explain what's missing."""),
         
         return "\n".join(schema_info)
     
-    def get_actual_schema(self) -> str:
-        """Get the actual database schema by examining the real table structure"""
-        try:
-            # Get actual column info for each table
-            tables = self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-            
-            schema_details = []
-            for (table_name,) in tables:
-                schema_details.append(f"\n=== {table_name.upper()} TABLE ===")
-                
-                # Get column info
-                columns = self.cursor.execute(f"PRAGMA table_info({table_name})").fetchall()
-                for col in columns:
-                    schema_details.append(f"{col[1]} ({col[2]})")
-                
-                # Show sample data to understand the structure
-                try:
-                    sample = self.cursor.execute(f"SELECT * FROM {table_name} LIMIT 2").fetchall()
-                    if sample:
-                        schema_details.append(f"Sample data: {sample[0]}")
-                except:
-                    pass
-            
-            return "\n".join(schema_details)
-        except Exception as e:
-            return f"Error getting schema: {e}"
-    
     def _is_safe_query(self, sql: str) -> bool:
         """Check if SQL query is safe (SELECT only)"""
-        sql_upper = sql.upper().strip()
+        # Clean the SQL first - remove explanatory text
+        lines = sql.split('\n')
+        sql_lines = []
+        
+        for line in lines:
+            line = line.strip()
+            # Skip empty lines and obvious explanatory text
+            if line and not line.startswith(('This', 'However', 'We', 'Alternatively', 'All')):
+                sql_lines.append(line)
+        
+        # Join the actual SQL lines
+        clean_sql = ' '.join(sql_lines).strip()
+        
+        # Remove common formatting
+        clean_sql = clean_sql.replace('```sql', '').replace('```', '').strip()
         
         # Must start with SELECT
-        if not sql_upper.startswith('SELECT'):
+        if not clean_sql.upper().startswith('SELECT'):
             return False
         
-        # Check for forbidden keywords
+        # Check for forbidden keywords in the actual SQL
         forbidden = ['DROP', 'DELETE', 'UPDATE', 'INSERT', 'ALTER', 'CREATE', 'TRUNCATE']
+        clean_sql_upper = clean_sql.upper()
+        
         for keyword in forbidden:
-            if keyword in sql_upper:
+            # Only flag if the keyword appears as a SQL command, not in explanatory text
+            if f' {keyword} ' in clean_sql_upper or clean_sql_upper.startswith(f'{keyword} '):
                 return False
         
         return True
@@ -160,6 +151,23 @@ If you need a column that doesn't exist, explain what's missing."""),
             # Get SQL from LLM
             response = self.llm.invoke(messages)
             sql = response.content.strip() if hasattr(response, 'content') else str(response).strip()
+            
+            # Extract just the SQL from explanatory text
+            lines = sql.split('\n')
+            sql_lines = []
+            
+            for line in lines:
+                line = line.strip()
+                # Look for lines that appear to be SQL
+                if line and (line.upper().startswith('SELECT') or 
+                           (sql_lines and not line.startswith(('This', 'However', 'We', 'All')))):
+                    sql_lines.append(line)
+                elif line.upper().startswith('SELECT'):
+                    sql_lines = [line]  # Start fresh with new SELECT
+            
+            # Use the first complete SQL statement found
+            if sql_lines:
+                sql = ' '.join(sql_lines).strip()
             
             # Clean up formatting
             sql = sql.replace('```sql', '').replace('```', '').strip()
@@ -194,12 +202,6 @@ If you need a column that doesn't exist, explain what's missing."""),
             return f"SQL Error: {e}\nGenerated SQL: {sql}"
         except Exception as e:
             return f"Error: {e}"
-    
-    def debug_query(self, question: str) -> str:
-        """Debug version that shows actual schema"""
-        print("🔍 ACTUAL DATABASE SCHEMA:")
-        print(self.get_actual_schema())
-        return self.query(question)
     
     def get_tables(self) -> str:
         """Get list of available tables"""

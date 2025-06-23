@@ -72,7 +72,7 @@ python config.py
 curl -fsSL https://ollama.ai/install.sh | sh
 
 # Pull a model (matches config.py default)
-ollama pull llama3.2:latest
+ollama pull llama3.2
 
 # Start server
 ollama serve

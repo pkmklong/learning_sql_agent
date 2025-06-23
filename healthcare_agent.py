@@ -51,22 +51,18 @@ class SimpleHealthcareAgent:
         
         # Create modern prompt template
         self.prompt_template = ChatPromptTemplate.from_messages([
-            ("system", """You are a SQL expert for healthcare data analysis.
-            Convert natural language questions to SELECT queries.
-            
-            Database Schema:
-            {schema}
-            
-            CRITICAL RULES:
-            - ONLY use column names that appear EXACTLY in the schema above
-            - DO NOT make up or assume any column names
-            - If a column doesn't exist in the schema, say so in your response
-            - Only use SELECT statements
-            - Return clean SQL without backticks or markdown
-            - Use SQLite syntax only (strftime for dates, NOT EXTRACT)
-            - Join tables using patient_id and provider_id when needed
-            
-            Before writing SQL, verify every column name exists in the schema."""),
+            ("system", """You are a healthcare database SQL expert.
+
+DATABASE SCHEMA (use ONLY these exact column names):
+{schema}
+
+RULES:
+1. Use ONLY columns that exist in the schema above
+2. Return clean SQL without backticks
+3. Use SQLite syntax
+4. SELECT statements only
+
+If you need a column that doesn't exist, explain what's missing."""),
             
             ("human", "{question}")
         ])
@@ -163,14 +159,9 @@ class SimpleHealthcareAgent:
             
             # Get SQL from LLM
             response = self.llm.invoke(messages)
+            sql = response.content.strip() if hasattr(response, 'content') else str(response).strip()
             
-            # Extract content based on response type
-            if hasattr(response, 'content'):
-                sql = response.content.strip()
-            else:
-                sql = str(response).strip()
-            
-            # Clean up the response (remove common formatting)
+            # Clean up formatting
             sql = sql.replace('```sql', '').replace('```', '').strip()
             
             # Safety check

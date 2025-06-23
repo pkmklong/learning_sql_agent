@@ -57,13 +57,16 @@ class SimpleHealthcareAgent:
             Database Schema:
             {schema}
             
-            Rules:
+            CRITICAL RULES:
+            - ONLY use column names that appear EXACTLY in the schema above
+            - DO NOT make up or assume any column names
+            - If a column doesn't exist in the schema, say so in your response
             - Only use SELECT statements
             - Return clean SQL without backticks or markdown
             - Use SQLite syntax only (strftime for dates, NOT EXTRACT)
-            - Use the exact column names shown in the schema above
             - Join tables using patient_id and provider_id when needed
-            - Keep queries simple and efficient"""),
+            
+            Before writing SQL, verify every column name exists in the schema."""),
             
             ("human", "{question}")
         ])

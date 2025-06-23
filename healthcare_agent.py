@@ -139,6 +139,33 @@ class SimpleHealthcareAgent:
         
         return "\n".join(schema_info)
     
+    def get_actual_schema(self) -> str:
+        """Get the actual database schema by examining the real table structure"""
+        try:
+            # Get actual column info for each table
+            tables = self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+            
+            schema_details = []
+            for (table_name,) in tables:
+                schema_details.append(f"\n=== {table_name.upper()} TABLE ===")
+                
+                # Get column info
+                columns = self.cursor.execute(f"PRAGMA table_info({table_name})").fetchall()
+                for col in columns:
+                    schema_details.append(f"{col[1]} ({col[2]})")
+                
+                # Show sample data to understand the structure
+                try:
+                    sample = self.cursor.execute(f"SELECT * FROM {table_name} LIMIT 2").fetchall()
+                    if sample:
+                        schema_details.append(f"Sample data: {sample[0]}")
+                except:
+                    pass
+            
+            return "\n".join(schema_details)
+        except Exception as e:
+            return f"Error getting schema: {e}"
+    
     def _is_safe_query(self, sql: str) -> bool:
         """Check if SQL query is safe (SELECT only)"""
         sql_upper = sql.upper().strip()
@@ -207,6 +234,12 @@ class SimpleHealthcareAgent:
         except Exception as e:
             return f"Error: {e}"
     
+    def debug_query(self, question: str) -> str:
+        """Debug version that shows actual schema"""
+        print("🔍 ACTUAL DATABASE SCHEMA:")
+        print(self.get_actual_schema())
+        return self.query(question)
+    
     def get_tables(self) -> str:
         """Get list of available tables"""
         tables = self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
@@ -241,6 +274,10 @@ def main():
         
         # Show tables
         print(f"\n📋 {agent.get_tables()}")
+        
+        # Debug: Show actual schema structure
+        print("\n🔍 DEBUGGING: Actual database structure:")
+        print(agent.get_actual_schema())
         
         print("\n💡 Example questions you can ask:")
         examples = [

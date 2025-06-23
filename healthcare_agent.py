@@ -67,6 +67,17 @@ class SimpleHealthcareAgent:
             - Keep queries simple and efficient
             - Focus on the specific question asked
             
+            Common JOIN Patterns:
+            - Patient medications: FROM rx_prescriptions r JOIN providers p ON r.provider_id = p.provider_id
+            - Provider claims: FROM dx_claims d JOIN providers p ON d.provider_id = p.provider_id
+            - Patient journey: FROM dx_claims d JOIN rx_prescriptions r ON d.patient_id = r.patient_id
+            
+            Key Column Names (use exactly as shown):
+            - rx_prescriptions.medication (NOT drug_name)
+            - providers.specialty 
+            - dx_claims.claim_cost
+            - dx_claims.diagnosis_code
+            
             Example date queries:
             - Monthly grouping: SELECT strftime('%Y-%m', service_date) as month, COUNT(*) FROM table GROUP BY strftime('%Y-%m', service_date)
             - Year grouping: SELECT strftime('%Y', service_date) as year, COUNT(*) FROM table GROUP BY strftime('%Y', service_date)"""),
@@ -98,7 +109,7 @@ class SimpleHealthcareAgent:
             raise ValueError(f"Unknown model type: {self.config.type}")
     
     def _get_schema(self) -> str:
-        """Get database schema information"""
+        """Get database schema information with relationships"""
         schema_info = []
         
         # Get table names
@@ -110,6 +121,18 @@ class SimpleHealthcareAgent:
             schema_info.append(f"\nTable: {table_name}")
             for col in table_info:
                 schema_info.append(f"  - {col[1]} ({col[2]})")
+        
+        # Add explicit relationship and column information
+        schema_info.append(f"\nKey Relationships:")
+        schema_info.append(f"  - dx_claims.patient_id = rx_prescriptions.patient_id (same patient)")
+        schema_info.append(f"  - dx_claims.provider_id = providers.provider_id (provider info)")
+        schema_info.append(f"  - rx_prescriptions.provider_id = providers.provider_id (prescribing provider)")
+        
+        schema_info.append(f"\nImportant Columns:")
+        schema_info.append(f"  - rx_prescriptions.medication (drug name)")
+        schema_info.append(f"  - providers.specialty (provider specialty)")
+        schema_info.append(f"  - dx_claims.claim_cost (cost amount)")
+        schema_info.append(f"  - dx_claims.diagnosis_code (medical condition)")
         
         return "\n".join(schema_info)
     

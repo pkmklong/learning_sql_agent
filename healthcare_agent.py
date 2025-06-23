@@ -57,12 +57,19 @@ class SimpleHealthcareAgent:
             Database Schema:
             {schema}
             
-            Rules:
+            IMPORTANT SQLite Syntax Rules:
             - Only use SELECT statements
             - Return clean SQL without backticks or markdown
-            - Use proper SQLite syntax
+            - Use SQLite-specific functions (NOT PostgreSQL/MySQL)
+            - For dates, use: strftime('%Y-%m', date_column) for year-month
+            - For month only: strftime('%m', date_column)
+            - For year only: strftime('%Y', date_column)
             - Keep queries simple and efficient
-            - Focus on the specific question asked"""),
+            - Focus on the specific question asked
+            
+            Example date queries:
+            - Monthly grouping: SELECT strftime('%Y-%m', service_date) as month, COUNT(*) FROM table GROUP BY strftime('%Y-%m', service_date)
+            - Year grouping: SELECT strftime('%Y', service_date) as year, COUNT(*) FROM table GROUP BY strftime('%Y', service_date)"""),
             
             ("human", "{question}")
         ])

@@ -57,31 +57,13 @@ class SimpleHealthcareAgent:
             Database Schema:
             {schema}
             
-            IMPORTANT SQLite Syntax Rules:
+            Rules:
             - Only use SELECT statements
             - Return clean SQL without backticks or markdown
-            - Use SQLite-specific functions (NOT PostgreSQL/MySQL)
-            - For dates, use: strftime('%Y-%m', date_column) for year-month
-            - For month only: strftime('%m', date_column)
-            - For year only: strftime('%Y', date_column)
-            - Keep queries simple and efficient
-            - Focus on the specific question asked
-            
-            Common JOIN Patterns:
-            - Patient medications: FROM rx_prescriptions r JOIN providers p ON r.provider_id = p.provider_id
-            - Provider claims: FROM dx_claims d JOIN providers p ON d.provider_id = p.provider_id
-            - Patient journey: FROM dx_claims d JOIN rx_prescriptions r ON d.patient_id = r.patient_id
-            
-            Key Column Names (use exactly as shown):
-            - rx_prescriptions.medication (NOT drug_name)
-            - providers.specialty 
-            - dx_claims.cost (NOT claim_cost)
-            - dx_claims.diagnosis_code
-            - All tables have patient_id and provider_id for joins
-            
-            Example date queries:
-            - Monthly grouping: SELECT strftime('%Y-%m', service_date) as month, COUNT(*) FROM table GROUP BY strftime('%Y-%m', service_date)
-            - Year grouping: SELECT strftime('%Y', service_date) as year, COUNT(*) FROM table GROUP BY strftime('%Y', service_date)"""),
+            - Use SQLite syntax only (strftime for dates, NOT EXTRACT)
+            - Use the exact column names shown in the schema above
+            - Join tables using patient_id and provider_id when needed
+            - Keep queries simple and efficient"""),
             
             ("human", "{question}")
         ])
@@ -110,32 +92,17 @@ class SimpleHealthcareAgent:
             raise ValueError(f"Unknown model type: {self.config.type}")
     
     def _get_schema(self) -> str:
-        """Get database schema information with relationships"""
+        """Get database schema information"""
         schema_info = []
         
-        # Get table names
+        # Get table names and their columns
         tables = self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         
         for (table_name,) in tables:
-            # Get table info
             table_info = self.cursor.execute(f"PRAGMA table_info({table_name})").fetchall()
             schema_info.append(f"\nTable: {table_name}")
             for col in table_info:
                 schema_info.append(f"  - {col[1]} ({col[2]})")
-        
-        # Add explicit relationship and column information
-        schema_info.append(f"\nKey Relationships:")
-        schema_info.append(f"  - dx_claims.patient_id = rx_prescriptions.patient_id (same patient)")
-        schema_info.append(f"  - dx_claims.provider_id = providers.provider_id (provider info)")
-        schema_info.append(f"  - rx_prescriptions.provider_id = providers.provider_id (prescribing provider)")
-        
-        schema_info.append(f"\nImportant Columns:")
-        schema_info.append(f"  - rx_prescriptions.medication (drug name)")
-        schema_info.append(f"  - providers.specialty (provider specialty)")
-        schema_info.append(f"  - dx_claims.cost (claim cost amount, NOT claim_cost)")
-        schema_info.append(f"  - dx_claims.diagnosis_code (medical condition)")
-        schema_info.append(f"  - dx_claims.patient_id, rx_prescriptions.patient_id (patient identifiers)")
-        schema_info.append(f"  - providers.provider_id (provider identifier)")
         
         return "\n".join(schema_info)
     
@@ -275,9 +242,9 @@ def main():
         # Show tables
         print(f"\n📋 {agent.get_tables()}")
         
-        # Debug: Show actual schema structure
-        print("\n🔍 DEBUGGING: Actual database structure:")
-        print(agent.get_actual_schema())
+        # Debug: Show schema for troubleshooting
+        print("\n🔍 DATABASE SCHEMA:")
+        print(agent.schema)
         
         print("\n💡 Example questions you can ask:")
         examples = [

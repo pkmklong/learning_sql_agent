@@ -1,6 +1,5 @@
 """
-Healthcare Database Setup Script
-Creates sample healthcare database with realistic medical data
+Mock claims DB setup script
 """
 
 import sqlite3

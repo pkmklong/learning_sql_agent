@@ -1,34 +1,31 @@
 """
 Simple healthcare SQL agent configuration
 """
-
 import os
 from pydantic import BaseModel
 
-# Which model to use by default
-DEFAULT_MODEL = "ollama"  # Change to "openai" if you prefer
+# Default model
+DEFAULT_MODEL = "ollama"
 
 class ModelConfig(BaseModel):
-    """Base model configuration"""
     type: str
-    temperature: float = 0.0
-
-class OllamaConfig(ModelConfig):
-    """Ollama local model settings"""
-    type: str = "ollama"
-    model: str = "llama3.2"
-    base_url: str = "http://localhost:11434"
-
-class OpenAIConfig(ModelConfig):
-    """OpenAI API model settings"""
-    type: str = "openai"
-    model_name: str = "gpt-3.5-turbo"
-    api_key_env: str = "OPENAI_API_KEY"
+    model: str = ""
+    model_name: str = ""
+    base_url: str = ""
+    api_key_env: str = ""
 
 # Available models
 MODELS = {
-    "ollama": OllamaConfig(),
-    "openai": OpenAIConfig()
+    "ollama": ModelConfig(
+        type="ollama",
+        model="llama3.2",
+        base_url="http://localhost:11434"
+    ),
+    "openai": ModelConfig(
+        type="openai", 
+        model_name="gpt-3.5-turbo",
+        api_key_env="OPENAI_API_KEY"
+    )
 }
 
 def get_model_config(model_name: str = None):
@@ -37,11 +34,11 @@ def get_model_config(model_name: str = None):
         model_name = DEFAULT_MODEL
     
     if model_name not in MODELS:
-        raise ValueError(f"Unknown model: {model_name}. Choose: {list(MODELS.keys())}")
+        raise ValueError(f"Unknown model: {model_name}")
     
     return MODELS[model_name]
 
-def check_model_ready(model_name: str = None) -> tuple[bool, str]:
+def check_model_ready(model_name: str = None):
     """Check if model is ready to use"""
     config = get_model_config(model_name)
     
@@ -53,13 +50,6 @@ def check_model_ready(model_name: str = None) -> tuple[bool, str]:
 
 def list_models():
     """Show available models"""
-    print("\n🤖 Available Models:")
-    for name, config in MODELS.items():
+    for name in MODELS:
         ready, status = check_model_ready(name)
-        marker = "✅" if ready else "❌"
-        cost = "Free" if name == "ollama" else "Paid"
-        print(f"{marker} {name} ({cost}) - {status}")
-
-if __name__ == "__main__":
-    list_models()
-    print(f"\nDefault: {DEFAULT_MODEL}")
+        print(f"{'✅' if ready else '❌'} {name} - {status}")

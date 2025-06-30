@@ -1,301 +1,183 @@
 """
-Healthcare SQL Agent - Simple and Reliable
+Healthcare Database Setup Script
+Creates sample healthcare database with realistic medical data
 """
 
 import sqlite3
 import os
-from dotenv import load_dotenv
 
-# Config should always exist
-from config import get_model_config, check_model_ready, list_models, DEFAULT_MODEL
-
-# LLM imports
-from langchain_openai import ChatOpenAI
-from langchain_ollama import OllamaLLM
-
-# Modern prompt handling
-from langchain.prompts import ChatPromptTemplate
-
-# Load environment variables
-load_dotenv()
-
-class SimpleHealthcareAgent:
-    """
-    Simple healthcare agent that builds SQL and executes it safely
-    """
+def create_healthcare_database(db_path: str = "healthcare_hackathon.db"):
+    """Create a sample healthcare database for the hackathon"""
     
-    def __init__(self, db_path: str, model: str = None):
-        self.db_path = db_path
-        
-        # Use default model if none specified
-        if model is None:
-            model = DEFAULT_MODEL
-        
-        # Get validated model config
-        self.config = get_model_config(model)
-        
-        # Check if model is ready
-        ready, status = check_model_ready(model)
-        if not ready:
-            raise ValueError(f"Model '{model}' not ready: {status}")
-        
-        # Initialize database connection
-        self.conn = sqlite3.connect(db_path)
-        self.cursor = self.conn.cursor()
-        
-        # Initialize LLM
-        self.llm = self._setup_llm()
-        
-        # Get schema info once
-        self.schema = self._get_schema()
-        
-        # Create modern prompt template
-        self.prompt_template = ChatPromptTemplate.from_messages([
-            ("system", """You are a healthcare database SQL expert.
+    # Remove existing database if it exists
+    if os.path.exists(db_path):
+        print(f"🗑️  Removing existing database: {db_path}")
+        os.remove(db_path)
+    
+    print(f"📊 Creating healthcare database: {db_path}")
+    
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    # Create diagnosis claims table (DX)
+    print("   Creating dx_claims table...")
+    cursor.execute('''
+        CREATE TABLE dx_claims (
+            claim_id INTEGER PRIMARY KEY,
+            patient_id INTEGER NOT NULL,
+            diagnosis_code TEXT NOT NULL,
+            service_date DATE NOT NULL,
+            provider_id INTEGER NOT NULL,
+            provider_specialty TEXT NOT NULL,
+            cpt_code TEXT,
+            claim_amount DECIMAL(10,2)
+        )
+    ''')
+    
+    # Create prescription table (RX)
+    print("   Creating rx_prescriptions table...")
+    cursor.execute('''
+        CREATE TABLE rx_prescriptions (
+            prescription_id INTEGER PRIMARY KEY,
+            patient_id INTEGER NOT NULL,
+            ndc_code TEXT NOT NULL,
+            drug_name TEXT NOT NULL,
+            generic_name TEXT NOT NULL,
+            service_date DATE NOT NULL,
+            provider_id INTEGER NOT NULL,
+            provider_specialty TEXT NOT NULL,
+            quantity INTEGER,
+            days_supply INTEGER,
+            copay DECIMAL(8,2)
+        )
+    ''')
+    
+    # Create providers reference table
+    print("   Creating providers table...")
+    cursor.execute('''
+        CREATE TABLE providers (
+            provider_id INTEGER PRIMARY KEY,
+            provider_name TEXT NOT NULL,
+            specialty TEXT NOT NULL,
+            practice_location TEXT
+        )
+    ''')
+    
+    # Insert sample diagnosis claims data
+    print("   Inserting diagnosis claims data...")
+    dx_claims_data = [
+        (1, 1001, 'E1140', '2024-03-15', 201, 'Endocrinology', '99213', 125.50),
+        (2, 1002, 'I2510', '2024-03-16', 202, 'Cardiology', '93000', 89.25),
+        (3, 1003, 'J449', '2024-03-17', 203, 'Pulmonology', '94010', 156.75),
+        (4, 1001, 'Z7901', '2024-03-18', 204, 'Oncology', '77067', 245.00),
+        (5, 1004, 'M545', '2024-03-19', 205, 'Orthopedics', '20610', 178.30),
+        (6, 1005, 'F329', '2024-03-20', 206, 'Psychiatry', '90834', 95.00),
+        (7, 1002, 'N183', '2024-03-21', 207, 'Nephrology', '36415', 67.80),
+        (8, 1006, 'K219', '2024-03-22', 208, 'Gastroenterology', '43235', 312.45),
+        (9, 1003, 'G309', '2024-03-23', 209, 'Neurology', '95860', 189.60),
+        (10, 1007, 'L309', '2024-03-24', 210, 'Dermatology', '11100', 98.25),
+        (11, 1008, 'H269', '2024-03-25', 211, 'Ophthalmology', '92004', 145.75),
+        (12, 1009, 'N390', '2024-03-26', 212, 'Urology', '51798', 234.90)
+    ]
+    
+    # Insert sample prescription data
+    print("   Inserting prescription data...")
+    rx_prescriptions_data = [
+        (1, 1001, '0088221947', 'Metformin HCl 500mg', 'Metformin', '2024-03-15', 201, 'Endocrinology', 60, 30, 10.00),
+        (2, 1002, '0003084221', 'Lisinopril 10mg', 'Lisinopril', '2024-03-16', 202, 'Cardiology', 30, 30, 5.00),
+        (3, 1003, '0173068220', 'Albuterol Sulfate 90mcg', 'Albuterol', '2024-03-17', 203, 'Pulmonology', 1, 30, 15.25),
+        (4, 1004, '0093051556', 'Ibuprofen 600mg', 'Ibuprofen', '2024-03-19', 205, 'Orthopedics', 60, 10, 8.50),
+        (5, 1005, '0378603093', 'Sertraline 50mg', 'Sertraline', '2024-03-20', 206, 'Psychiatry', 30, 30, 12.75),
+        (6, 1002, '0054327599', 'Furosemide 40mg', 'Furosemide', '2024-03-21', 207, 'Nephrology', 30, 30, 6.80),
+        (7, 1006, '0093515301', 'Omeprazole 20mg', 'Omeprazole', '2024-03-22', 208, 'Gastroenterology', 30, 30, 9.45),
+        (8, 1003, '0093832568', 'Gabapentin 300mg', 'Gabapentin', '2024-03-23', 209, 'Neurology', 90, 30, 18.90),
+        (9, 1007, '0168013631', 'Hydrocortisone Cream 1%', 'Hydrocortisone', '2024-03-24', 210, 'Dermatology', 1, 14, 11.25),
+        (10, 1008, '0065015015', 'Latanoprost 0.005%', 'Latanoprost', '2024-03-25', 211, 'Ophthalmology', 1, 30, 45.60),
+        (11, 1009, '0093511205', 'Tamsulosin 0.4mg', 'Tamsulosin', '2024-03-26', 212, 'Urology', 30, 30, 14.30),
+        (12, 1001, '0088019747', 'Insulin Glargine 100units/ml', 'Insulin Glargine', '2024-03-28', 201, 'Endocrinology', 1, 30, 85.75)
+    ]
+    
+    # Insert provider reference data
+    print("   Inserting provider data...")
+    providers_data = [
+        (201, 'Dr. Sarah Chen', 'Endocrinology', 'Downtown Medical Center'),
+        (202, 'Dr. Michael Rodriguez', 'Cardiology', 'Heart Care Clinic'),
+        (203, 'Dr. Jennifer Kim', 'Pulmonology', 'Respiratory Health Center'),
+        (204, 'Dr. David Thompson', 'Oncology', 'Cancer Treatment Center'),
+        (205, 'Dr. Lisa Wang', 'Orthopedics', 'Bone & Joint Specialists'),
+        (206, 'Dr. Robert Johnson', 'Psychiatry', 'Mental Health Associates'),
+        (207, 'Dr. Maria Garcia', 'Nephrology', 'Kidney Care Center'),
+        (208, 'Dr. James Wilson', 'Gastroenterology', 'Digestive Health Clinic'),
+        (209, 'Dr. Emily Davis', 'Neurology', 'Neurological Institute'),
+        (210, 'Dr. Andrew Miller', 'Dermatology', 'Skin Care Specialists'),
+        (211, 'Dr. Rachel Brown', 'Ophthalmology', 'Eye Care Center'),
+        (212, 'Dr. Kevin Lee', 'Urology', 'Urological Associates')
+    ]
+    
+    # Execute all inserts
+    cursor.executemany('INSERT INTO dx_claims VALUES (?, ?, ?, ?, ?, ?, ?, ?)', dx_claims_data)
+    cursor.executemany('INSERT INTO rx_prescriptions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', rx_prescriptions_data)
+    cursor.executemany('INSERT INTO providers VALUES (?, ?, ?, ?)', providers_data)
+    
+    # Commit and close
+    conn.commit()
+    conn.close()
+    
+    print(f"✅ Database created successfully!")
+    print(f"   📍 Location: {os.path.abspath(db_path)}")
+    print(f"   📊 Tables: dx_claims (12 records), rx_prescriptions (12 records), providers (12 records)")
+    
+    return db_path
 
-{schema}
-
-CRITICAL: Before writing SQL, check which table contains each column:
-- copay is in rx_prescriptions (NOT dx_claims)
-- claim_amount is in dx_claims (NOT rx_prescriptions)  
-- diagnosis_code is in dx_claims (NOT rx_prescriptions)
-- drug_name is in rx_prescriptions (NOT dx_claims)
-
-RULES:
-1. Return ONLY the SQL query, no explanations
-2. Use ONLY columns that exist in the correct table shown above
-3. JOIN tables when you need columns from multiple tables
-4. Use SQLite syntax
-5. SELECT statements only
-
-Example: To get average copay for patients with diabetes:
-SELECT AVG(r.copay) FROM dx_claims d JOIN rx_prescriptions r ON d.patient_id = r.patient_id WHERE d.diagnosis_code LIKE '%diabetes%'"""),
-            
-            ("human", "{question}")
-        ])
-    
-    def _setup_llm(self):
-        """Initialize the LLM based on validated config"""
-        if self.config.type == "ollama":
-            return OllamaLLM(
-                model=self.config.model,
-                base_url=self.config.base_url,
-                temperature=0.1
-            )
-        
-        elif self.config.type == "openai":
-            api_key = os.getenv(self.config.api_key_env)
-            if not api_key:
-                raise ValueError(f"OpenAI requires API key. Set {self.config.api_key_env} in .env file")
-            
-            return ChatOpenAI(
-                model=self.config.model_name,
-                temperature=0.1,
-                api_key=api_key
-            )
-        
-        else:
-            raise ValueError(f"Unknown model type: {self.config.type}")
-    
-    def _get_schema(self) -> str:
-        """Get database schema information"""
-        schema_info = []
-        
-        # Get table names and their columns
-        tables = self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-        
-        for (table_name,) in tables:
-            table_info = self.cursor.execute(f"PRAGMA table_info({table_name})").fetchall()
-            schema_info.append(f"\nTable: {table_name}")
-            for col in table_info:
-                schema_info.append(f"  - {col[1]} ({col[2]})")
-        
-        return "\n".join(schema_info)
-    
-    def _is_safe_query(self, sql: str) -> bool:
-        """Check if SQL query is safe (SELECT only)"""
-        # Clean the SQL first - remove explanatory text
-        lines = sql.split('\n')
-        sql_lines = []
-        
-        for line in lines:
-            line = line.strip()
-            # Skip empty lines and obvious explanatory text
-            if line and not line.startswith(('This', 'However', 'We', 'Alternatively', 'All')):
-                sql_lines.append(line)
-        
-        # Join the actual SQL lines
-        clean_sql = ' '.join(sql_lines).strip()
-        
-        # Remove common formatting
-        clean_sql = clean_sql.replace('```sql', '').replace('```', '').strip()
-        
-        # Must start with SELECT
-        if not clean_sql.upper().startswith('SELECT'):
-            return False
-        
-        # Check for forbidden keywords in the actual SQL
-        forbidden = ['DROP', 'DELETE', 'UPDATE', 'INSERT', 'ALTER', 'CREATE', 'TRUNCATE']
-        clean_sql_upper = clean_sql.upper()
-        
-        for keyword in forbidden:
-            # Only flag if the keyword appears as a SQL command, not in explanatory text
-            if f' {keyword} ' in clean_sql_upper or clean_sql_upper.startswith(f'{keyword} '):
-                return False
-        
-        return True
-    
-    def query(self, question: str) -> str:
-        """Query the database with natural language"""
-        try:
-            # Use ChatPromptTemplate for structured prompting
-            messages = self.prompt_template.format_messages(
-                schema=self.schema,
-                question=question
-            )
-            
-            # Get SQL from LLM
-            response = self.llm.invoke(messages)
-            sql = response.content.strip() if hasattr(response, 'content') else str(response).strip()
-            
-            # Extract just the SQL from explanatory text
-            lines = sql.split('\n')
-            sql_lines = []
-            
-            for line in lines:
-                line = line.strip()
-                # Look for lines that appear to be SQL
-                if line and (line.upper().startswith('SELECT') or 
-                           (sql_lines and not line.startswith(('This', 'However', 'We', 'All')))):
-                    sql_lines.append(line)
-                elif line.upper().startswith('SELECT'):
-                    sql_lines = [line]  # Start fresh with new SELECT
-            
-            # Use the first complete SQL statement found
-            if sql_lines:
-                sql = ' '.join(sql_lines).strip()
-            
-            # Clean up formatting
-            sql = sql.replace('```sql', '').replace('```', '').strip()
-            
-            # Safety check
-            if not self._is_safe_query(sql):
-                return f"Unsafe query detected. Only SELECT statements allowed.\nGenerated: {sql}"
-            
-            # Execute query
-            self.cursor.execute(sql)
-            results = self.cursor.fetchall()
-            
-            # Format results nicely
-            if not results:
-                return "No results found."
-            
-            if len(results) == 1 and len(results[0]) == 1:
-                # Single value result
-                return f"Result: {results[0][0]}"
-            
-            # Multiple results - format as text
-            result_text = f"Found {len(results)} results:\n"
-            for i, row in enumerate(results[:10]):  # Limit to 10 rows
-                result_text += f"{i+1}. {row}\n"
-            
-            if len(results) > 10:
-                result_text += f"... and {len(results) - 10} more rows"
-            
-            return result_text
-            
-        except sqlite3.Error as e:
-            return f"SQL Error: {e}\nGenerated SQL: {sql}"
-        except Exception as e:
-            return f"Error: {e}"
-    
-    def get_tables(self) -> str:
-        """Get list of available tables"""
-        tables = self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-        return "Available tables: " + ", ".join([t[0] for t in tables])
-    
-    def close(self):
-        """Close database connection"""
-        self.conn.close()
-
-def main():
-    """Demo the simple healthcare agent"""
-    
-    print("🏥 Simple Healthcare SQL Agent")
-    print("=" * 35)
-    
-    # Check if database exists
-    db_path = "healthcare_hackathon.db"
+def show_database_info(db_path: str = "healthcare_hackathon.db"):
+    """Show information about the database"""
     if not os.path.exists(db_path):
-        print("❌ Database not found!")
-        print("   Run: python setup_database.py")
+        print(f"❌ Database not found: {db_path}")
         return
     
-    print(f"📊 Using database: {db_path}")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
     
-    # Show available models
-    print("\n🤖 Available Models:")
-    list_models()
+    print(f"\n📊 Database Information: {db_path}")
+    print("=" * 50)
     
-    try:
-        print(f"\n🚀 Starting simple agent with {DEFAULT_MODEL}...")
-        agent = SimpleHealthcareAgent(db_path)
-        
-        # Show tables
-        print(f"\n📋 {agent.get_tables()}")
-        
-        # Debug: Show schema for troubleshooting
-        print("\n🔍 DATABASE SCHEMA:")
-        print(agent.schema)
-        
-        print("\n💡 Example questions you can ask:")
-        examples = [
-            "How many diagnosis claims are there?",
-            "What are the top 3 diagnosis codes?",
-            "How many claims per specialty?",
-            "What medications are prescribed most?",
-            "Which providers have the most claims?",
-        ]
-        
-        for i, example in enumerate(examples, 1):
-            print(f"   {i}. {example}")
-        
-        # Interactive mode
-        print("\n" + "="*50)
-        print("🎮 ASK YOUR QUESTIONS!")
-        print("Type 'quit', 'exit', or 'done' to stop")
-        print("="*50)
-        
-        while True:
-            try:
-                # Get user input
-                user_question = input("\n❓ Your question: ").strip()
-                
-                # Check for exit commands
-                if user_question.lower() in ['quit', 'exit', 'done', 'q']:
-                    print("👋 Thanks for using the healthcare agent!")
-                    break
-                
-                # Skip empty questions
-                if not user_question:
-                    continue
-                
-                # Process the question
-                print("🤖 Thinking...")
-                result = agent.query(user_question)
-                print(f"✅ {result}")
-                
-            except KeyboardInterrupt:
-                print("\n👋 Exiting... Thanks for using the healthcare agent!")
-                break
-            except Exception as e:
-                print(f"❌ Error: {e}")
-        
-        # Clean up
-        agent.close()
-        
-    except Exception as e:
-        print(f"❌ Setup failed: {e}")
+    # Get table info
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    tables = cursor.fetchall()
+    
+    for table in tables:
+        table_name = table[0]
+        cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+        count = cursor.fetchone()[0]
+        print(f"📋 {table_name}: {count} records")
+    
+    # Show sample data
+    print("\n🔍 Sample Data:")
+    print("-" * 30)
+    
+    cursor.execute("SELECT COUNT(DISTINCT patient_id) FROM dx_claims")
+    unique_patients = cursor.fetchone()[0]
+    print(f"👥 Unique patients: {unique_patients}")
+    
+    cursor.execute("SELECT COUNT(DISTINCT provider_specialty) FROM dx_claims")
+    specialties = cursor.fetchone()[0]
+    print(f"🏥 Medical specialties: {specialties}")
+    
+    cursor.execute("SELECT COUNT(DISTINCT generic_name) FROM rx_prescriptions")
+    medications = cursor.fetchone()[0]
+    print(f"💊 Unique medications: {medications}")
+    
+    conn.close()
 
 if __name__ == "__main__":
-    main()
+    print("🏥 Healthcare Database Setup")
+    print("=" * 30)
+    
+    # Create the database
+    db_path = create_healthcare_database()
+    
+    # Show info about what was created
+    show_database_info(db_path)
+    
+    print("\n🚀 Ready for hackathon!")
+    print("   Run: python healthcare_agent.py")

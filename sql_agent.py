@@ -148,18 +148,21 @@ Thought: {agent_scratchpad}""")
 # Create agent
 tools = [execute_sql_query]
 agent = create_react_agent(llm, tools, prompt)
-agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=False)
+agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True, max_iterations=3)
 
 def ask(question):
     """Ask a question about the healthcare data"""
     print(f"Question: {question}")
-    response = agent_executor.invoke({
-        "input": question,
-        "schema": get_schema(),
-        "tools": [tool.name + ": " + tool.description for tool in tools],
-        "tool_names": [tool.name for tool in tools]
-    })
-    print(f"Answer: {response['output']}")
+    try:
+        response = agent_executor.invoke({
+            "input": question,
+            "schema": get_schema(),
+            "tools": [tool.name + ": " + tool.description for tool in tools],
+            "tool_names": [tool.name for tool in tools]
+        })
+        print(f"Answer: {response['output']}")
+    except Exception as e:
+        print(f"Error: {e}")
     print("-" * 60)
 
 # Test queries

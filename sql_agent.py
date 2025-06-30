@@ -9,8 +9,6 @@ from config import get_model_config, check_model_ready, DEFAULT_MODEL
 from langchain_openai import ChatOpenAI
 from langchain_ollama import OllamaLLM
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.tools import tool
-from langchain.agents import create_react_agent, AgentExecutor
 
 # Load environment variables
 load_dotenv()
@@ -51,7 +49,6 @@ def setup_llm(model_name=None):
     else:
         raise ValueError(f"Unknown model type: {config.type}")
 
-@tool
 def execute_sql_query(sql_query: str) -> str:
     """Execute a SQL query on the healthcare database and return results."""
     conn = sqlite3.connect(DB_PATH)
@@ -110,64 +107,49 @@ def get_schema():
 # Initialize LLM using your config system
 llm = setup_llm()
 
-# Agent prompt
-prompt = ChatPromptTemplate.from_template("""You are a healthcare data analyst. You have access to a healthcare database with this schema:
+# Simple prompt template for SQL generation
+prompt = ChatPromptTemplate.from_template("""
+You are a healthcare data analyst. Here's the database schema:
 
 {schema}
 
-When users ask questions about the data, write SQL queries to get the information and execute them using the execute_sql_query tool.
+Convert this question to a SQL query:
+"{question}"
 
-RULES:
-1. Use ONLY columns that exist in the schema above
-2. Use SQLite syntax
-3. SELECT statements only
-4. If you can't answer with available columns, explain what's missing
+Rules:
+- Use SQLite syntax (LIMIT not TOP)
+- Only SELECT statements
+- Use only columns that exist in the schema
 
-Common diagnosis codes: E1140 (diabetes), I2510 (heart disease), J449 (COPD), M545 (back pain), F329 (depression)
-
-You have access to the following tools:
-
-{tools}
-
-Use the following format:
-
-Question: the input question you must answer
-Thought: you should always think about what to do
-Action: the action to take, should be one of [{tool_names}]
-Action Input: the input to the action
-Observation: the result of the action
-... (this Thought/Action/Action Input/Observation can repeat N times)
-Thought: I now know the final answer
-Final Answer: the final answer to the original input question
-
-Begin!
-
-Question: {input}
-Thought: {agent_scratchpad}""")
-
-# Create agent
-tools = [execute_sql_query]
-agent = create_react_agent(llm, tools, prompt)
-agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True, max_iterations=3)
+Return only the SQL query, no explanation.
+""")
 
 def ask(question):
     """Ask a question about the healthcare data"""
     print(f"Question: {question}")
+    
     try:
-        response = agent_executor.invoke({
-            "input": question,
-            "schema": get_schema(),
-            "tools": [tool.name + ": " + tool.description for tool in tools],
-            "tool_names": [tool.name for tool in tools]
-        })
-        print(f"Answer: {response['output']}")
+        # Generate SQL
+        response = llm.invoke(prompt.format(schema=get_schema(), question=question))
+        sql = response.content.strip() if hasattr(response, 'content') else str(response).strip()
+        
+        # Clean up the SQL
+        sql = sql.replace('```sql', '').replace('```', '').strip()
+        
+        print(f"Generated SQL: {sql}")
+        
+        # Execute SQL
+        result = execute_sql_query(sql)
+        print(f"Answer: {result}")
+        
     except Exception as e:
         print(f"Error: {e}")
+    
     print("-" * 60)
 
 # Test queries
 ask("How many unique patients do we have?")
 ask("What are the top 5 most expensive claims?")
-ask("Which specialty has the most patients?")
+ask("Which specialty has the most claims?")
 ask("Show me all diabetes patients and their medications")
 ask("What's the average copay by medication type?")

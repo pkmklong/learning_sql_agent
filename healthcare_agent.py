@@ -1,295 +1,150 @@
-"""
-Healthcare SQL Agent - Simple and Reliable
-"""
-
 import sqlite3
 import os
 from dotenv import load_dotenv
 
-# Config should always exist
-from config import get_model_config, check_model_ready, list_models, DEFAULT_MODEL
+# Import your config system
+from config import get_model_config, check_model_ready, DEFAULT_MODEL
 
-# LLM imports
+# LLM imports  
 from langchain_openai import ChatOpenAI
 from langchain_ollama import OllamaLLM
-
-# Modern prompt handling
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.tools import tool
+from langchain.agents import create_tool_calling_agent, AgentExecutor
 
 # Load environment variables
 load_dotenv()
 
-class SimpleHealthcareAgent:
-    """
-    Simple healthcare agent that builds SQL and executes it safely
-    """
-    
-    def __init__(self, db_path: str, model: str = None):
-        self.db_path = db_path
-        
-        # Use default model if none specified
-        if model is None:
-            model = DEFAULT_MODEL
-        
-        # Get validated model config
-        self.config = get_model_config(model)
-        
-        # Check if model is ready
-        ready, status = check_model_ready(model)
-        if not ready:
-            raise ValueError(f"Model '{model}' not ready: {status}")
-        
-        # Initialize database connection
-        self.conn = sqlite3.connect(db_path)
-        self.cursor = self.conn.cursor()
-        
-        # Initialize LLM
-        self.llm = self._setup_llm()
-        
-        # Get schema info once
-        self.schema = self._get_schema()
-        
-        # Create modern prompt template
-        self.prompt_template = ChatPromptTemplate.from_messages([
-            ("system", """You are a healthcare database SQL expert.
+# Setup
+DB_PATH = "healthcare_hackathon.db"
 
-DATABASE SCHEMA (use ONLY these exact column names):
-{schema}
+def setup_llm(model_name=None):
+    """Initialize LLM using your config system"""
+    if model_name is None:
+        model_name = DEFAULT_MODEL
+    
+    # Get validated model config
+    config = get_model_config(model_name)
+    
+    # Check if model is ready
+    ready, status = check_model_ready(model_name)
+    if not ready:
+        raise ValueError(f"Model '{model_name}' not ready: {status}")
+    
+    # Initialize LLM based on config
+    if config.type == "ollama":
+        return OllamaLLM(
+            model=config.model,
+            base_url=config.base_url,
+            temperature=0.1
+        )
+    elif config.type == "openai":
+        api_key = os.getenv(config.api_key_env)
+        if not api_key:
+            raise ValueError(f"OpenAI requires API key. Set {config.api_key_env} in .env file")
+        
+        return ChatOpenAI(
+            model=config.model_name,
+            temperature=0.1,
+            api_key=api_key
+        )
+    else:
+        raise ValueError(f"Unknown model type: {config.type}")
 
-RULES:
-1. Return ONLY the SQL query, no explanations
-2. Use ONLY columns that exist in the schema above
-3. Use SQLite syntax
-4. SELECT statements only
-5. If you can't answer with available columns, say "Missing column: [column_name]"
-
-Return just the SQL query."""),
-            
-            ("human", "{question}")
-        ])
-    
-    def _setup_llm(self):
-        """Initialize the LLM based on validated config"""
-        if self.config.type == "ollama":
-            return OllamaLLM(
-                model=self.config.model,
-                base_url=self.config.base_url,
-                temperature=0.1
-            )
-        
-        elif self.config.type == "openai":
-            api_key = os.getenv(self.config.api_key_env)
-            if not api_key:
-                raise ValueError(f"OpenAI requires API key. Set {self.config.api_key_env} in .env file")
-            
-            return ChatOpenAI(
-                model=self.config.model_name,
-                temperature=0.1,
-                api_key=api_key
-            )
-        
-        else:
-            raise ValueError(f"Unknown model type: {self.config.type}")
-    
-    def _get_schema(self) -> str:
-        """Get database schema information"""
-        schema_info = []
-        
-        # Get table names and their columns
-        tables = self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-        
-        for (table_name,) in tables:
-            table_info = self.cursor.execute(f"PRAGMA table_info({table_name})").fetchall()
-            schema_info.append(f"\nTable: {table_name}")
-            for col in table_info:
-                schema_info.append(f"  - {col[1]} ({col[2]})")
-        
-        return "\n".join(schema_info)
-    
-    def _is_safe_query(self, sql: str) -> bool:
-        """Check if SQL query is safe (SELECT only)"""
-        # Clean the SQL first - remove explanatory text
-        lines = sql.split('\n')
-        sql_lines = []
-        
-        for line in lines:
-            line = line.strip()
-            # Skip empty lines and obvious explanatory text
-            if line and not line.startswith(('This', 'However', 'We', 'Alternatively', 'All')):
-                sql_lines.append(line)
-        
-        # Join the actual SQL lines
-        clean_sql = ' '.join(sql_lines).strip()
-        
-        # Remove common formatting
-        clean_sql = clean_sql.replace('```sql', '').replace('```', '').strip()
-        
-        # Must start with SELECT
-        if not clean_sql.upper().startswith('SELECT'):
-            return False
-        
-        # Check for forbidden keywords in the actual SQL
-        forbidden = ['DROP', 'DELETE', 'UPDATE', 'INSERT', 'ALTER', 'CREATE', 'TRUNCATE']
-        clean_sql_upper = clean_sql.upper()
-        
-        for keyword in forbidden:
-            # Only flag if the keyword appears as a SQL command, not in explanatory text
-            if f' {keyword} ' in clean_sql_upper or clean_sql_upper.startswith(f'{keyword} '):
-                return False
-        
-        return True
-    
-    def query(self, question: str) -> str:
-        """Query the database with natural language"""
-        try:
-            # Use ChatPromptTemplate for structured prompting
-            messages = self.prompt_template.format_messages(
-                schema=self.schema,
-                question=question
-            )
-            
-            # Get SQL from LLM
-            response = self.llm.invoke(messages)
-            sql = response.content.strip() if hasattr(response, 'content') else str(response).strip()
-            
-            # Extract just the SQL from explanatory text
-            lines = sql.split('\n')
-            sql_lines = []
-            
-            for line in lines:
-                line = line.strip()
-                # Look for lines that appear to be SQL
-                if line and (line.upper().startswith('SELECT') or 
-                           (sql_lines and not line.startswith(('This', 'However', 'We', 'All')))):
-                    sql_lines.append(line)
-                elif line.upper().startswith('SELECT'):
-                    sql_lines = [line]  # Start fresh with new SELECT
-            
-            # Use the first complete SQL statement found
-            if sql_lines:
-                sql = ' '.join(sql_lines).strip()
-            
-            # Clean up formatting
-            sql = sql.replace('```sql', '').replace('```', '').strip()
-            
-            # Safety check
-            if not self._is_safe_query(sql):
-                return f"Unsafe query detected. Only SELECT statements allowed.\nGenerated: {sql}"
-            
-            # Execute query
-            self.cursor.execute(sql)
-            results = self.cursor.fetchall()
-            
-            # Format results nicely
-            if not results:
-                return "No results found."
-            
-            if len(results) == 1 and len(results[0]) == 1:
-                # Single value result
-                return f"Result: {results[0][0]}"
-            
-            # Multiple results - format as text
-            result_text = f"Found {len(results)} results:\n"
-            for i, row in enumerate(results[:10]):  # Limit to 10 rows
-                result_text += f"{i+1}. {row}\n"
-            
-            if len(results) > 10:
-                result_text += f"... and {len(results) - 10} more rows"
-            
-            return result_text
-            
-        except sqlite3.Error as e:
-            return f"SQL Error: {e}\nGenerated SQL: {sql}"
-        except Exception as e:
-            return f"Error: {e}"
-    
-    def get_tables(self) -> str:
-        """Get list of available tables"""
-        tables = self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-        return "Available tables: " + ", ".join([t[0] for t in tables])
-    
-    def close(self):
-        """Close database connection"""
-        self.conn.close()
-
-def main():
-    """Demo the simple healthcare agent"""
-    
-    print("🏥 Simple Healthcare SQL Agent")
-    print("=" * 35)
-    
-    # Check if database exists
-    db_path = "healthcare_hackathon.db"
-    if not os.path.exists(db_path):
-        print("❌ Database not found!")
-        print("   Run: python setup_database.py")
-        return
-    
-    print(f"📊 Using database: {db_path}")
-    
-    # Show available models
-    print("\n🤖 Available Models:")
-    list_models()
+@tool
+def execute_sql_query(sql_query: str) -> str:
+    """Execute a SQL query on the healthcare database and return results."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
     
     try:
-        print(f"\n🚀 Starting simple agent with {DEFAULT_MODEL}...")
-        agent = SimpleHealthcareAgent(db_path)
+        # Safety check - only allow SELECT
+        if not sql_query.strip().upper().startswith('SELECT'):
+            return "Error: Only SELECT statements are allowed."
         
-        # Show tables
-        print(f"\n📋 {agent.get_tables()}")
+        cursor.execute(sql_query)
+        results = cursor.fetchall()
+        columns = [description[0] for description in cursor.description]
         
-        # Debug: Show schema for troubleshooting
-        print("\n🔍 DATABASE SCHEMA:")
-        print(agent.schema)
+        if not results:
+            return "No results found."
         
-        print("\n💡 Example questions you can ask:")
-        examples = [
-            "How many diagnosis claims are there?",
-            "What are the top 3 diagnosis codes?",
-            "How many claims per specialty?",
-            "What medications are prescribed most?",
-            "Which providers have the most claims?",
-        ]
+        # Format results nicely
+        if len(results) == 1 and len(results[0]) == 1:
+            return f"Result: {results[0][0]}"
         
-        for i, example in enumerate(examples, 1):
-            print(f"   {i}. {example}")
+        output = f"Found {len(results)} rows:\n"
+        output += " | ".join(columns) + "\n"
+        output += "-" * 50 + "\n"
         
-        # Interactive mode
-        print("\n" + "="*50)
-        print("🎮 ASK YOUR QUESTIONS!")
-        print("Type 'quit', 'exit', or 'done' to stop")
-        print("="*50)
+        for row in results[:10]:  # Show first 10 rows
+            output += " | ".join(str(x) for x in row) + "\n"
         
-        while True:
-            try:
-                # Get user input
-                user_question = input("\n❓ Your question: ").strip()
-                
-                # Check for exit commands
-                if user_question.lower() in ['quit', 'exit', 'done', 'q']:
-                    print("👋 Thanks for using the healthcare agent!")
-                    break
-                
-                # Skip empty questions
-                if not user_question:
-                    continue
-                
-                # Process the question
-                print("🤖 Thinking...")
-                result = agent.query(user_question)
-                print(f"✅ {result}")
-                
-            except KeyboardInterrupt:
-                print("\n👋 Exiting... Thanks for using the healthcare agent!")
-                break
-            except Exception as e:
-                print(f"❌ Error: {e}")
+        if len(results) > 10:
+            output += f"... and {len(results) - 10} more rows"
         
-        # Clean up
-        agent.close()
+        return output
         
     except Exception as e:
-        print(f"❌ Setup failed: {e}")
+        return f"SQL Error: {e}"
+    finally:
+        conn.close()
 
-if __name__ == "__main__":
-    main()
+def get_schema():
+    """Get database schema information"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    schema_info = []
+    tables = cursor.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    
+    for (table_name,) in tables:
+        table_info = cursor.execute(f"PRAGMA table_info({table_name})").fetchall()
+        schema_info.append(f"\nTable: {table_name}")
+        for col in table_info:
+            schema_info.append(f"  - {col[1]} ({col[2]})")
+    
+    conn.close()
+    return "\n".join(schema_info)
+
+# Initialize LLM using your config system
+llm = setup_llm()
+
+# Agent prompt
+prompt = ChatPromptTemplate.from_messages([
+    ("system", f"""You are a healthcare data analyst. You have access to a healthcare database with this schema:
+
+{get_schema()}
+
+When users ask questions about the data, write SQL queries to get the information and execute them using the execute_sql_query tool.
+
+RULES:
+1. Use ONLY columns that exist in the schema above
+2. Use SQLite syntax
+3. SELECT statements only
+4. If you can't answer with available columns, explain what's missing
+
+Common diagnosis codes: E1140 (diabetes), I2510 (heart disease), J449 (COPD), M545 (back pain), F329 (depression)
+"""),
+    ("user", "{{input}}"),
+    ("placeholder", "{{agent_scratchpad}}"),
+])
+
+# Create agent
+tools = [execute_sql_query]
+agent = create_tool_calling_agent(llm, tools, prompt)
+agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=False)
+
+def ask(question):
+    """Ask a question about the healthcare data"""
+    print(f"Question: {question}")
+    response = agent_executor.invoke({"input": question})
+    print(f"Answer: {response['output']}")
+    print("-" * 60)
+
+# Test queries
+ask("How many unique patients do we have?")
+ask("What are the top 5 most expensive claims?")
+ask("Which specialty has the most patients?")
+ask("Show me all diabetes patients and their medications")
+ask("What's the average copay by medication type?")

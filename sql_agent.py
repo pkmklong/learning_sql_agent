@@ -10,7 +10,7 @@ from langchain_openai import ChatOpenAI
 from langchain_ollama import OllamaLLM
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
-from langchain.agents import create_tool_calling_agent, AgentExecutor
+from langchain.agents import create_react_agent, AgentExecutor
 
 # Load environment variables
 load_dotenv()
@@ -111,10 +111,9 @@ def get_schema():
 llm = setup_llm()
 
 # Agent prompt
-prompt = ChatPromptTemplate.from_messages([
-    ("system", f"""You are a healthcare data analyst. You have access to a healthcare database with this schema:
+prompt = ChatPromptTemplate.from_template("""You are a healthcare data analyst. You have access to a healthcare database with this schema:
 
-{get_schema()}
+{schema}
 
 When users ask questions about the data, write SQL queries to get the information and execute them using the execute_sql_query tool.
 
@@ -125,20 +124,41 @@ RULES:
 4. If you can't answer with available columns, explain what's missing
 
 Common diagnosis codes: E1140 (diabetes), I2510 (heart disease), J449 (COPD), M545 (back pain), F329 (depression)
-"""),
-    ("user", "{input}"),
-    ("placeholder", "{agent_scratchpad}"),
-])
+
+You have access to the following tools:
+
+{tools}
+
+Use the following format:
+
+Question: the input question you must answer
+Thought: you should always think about what to do
+Action: the action to take, should be one of [{tool_names}]
+Action Input: the input to the action
+Observation: the result of the action
+... (this Thought/Action/Action Input/Observation can repeat N times)
+Thought: I now know the final answer
+Final Answer: the final answer to the original input question
+
+Begin!
+
+Question: {input}
+Thought: {agent_scratchpad}""")
 
 # Create agent
 tools = [execute_sql_query]
-agent = create_tool_calling_agent(llm, tools, prompt)
+agent = create_react_agent(llm, tools, prompt)
 agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=False)
 
 def ask(question):
     """Ask a question about the healthcare data"""
     print(f"Question: {question}")
-    response = agent_executor.invoke({"input": question})
+    response = agent_executor.invoke({
+        "input": question,
+        "schema": get_schema(),
+        "tools": [tool.name + ": " + tool.description for tool in tools],
+        "tool_names": [tool.name for tool in tools]
+    })
     print(f"Answer: {response['output']}")
     print("-" * 60)
 

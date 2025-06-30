@@ -126,8 +126,8 @@ RULES:
 
 Common diagnosis codes: E1140 (diabetes), I2510 (heart disease), J449 (COPD), M545 (back pain), F329 (depression)
 """),
-    ("user", "{{input}}"),
-    ("placeholder", "{{agent_scratchpad}}"),
+    ("user", "{input}"),
+    ("placeholder", "{agent_scratchpad}"),
 ])
 
 # Create agent

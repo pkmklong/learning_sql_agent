@@ -40,7 +40,7 @@ cp .env.example .env
 python setup_database.py
 
 # Run the agent
-python healthcare_agent.py
+python sql_agent.py
 ```
 
 ## 🤖 Supported Models
